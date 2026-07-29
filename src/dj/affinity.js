@@ -20,17 +20,22 @@ const PROPAGATION = { track: 1.0, artist: 0.35, album: 0.25, tag: 0.12 };
 // Votes decay so a profile can change its mind rather than fossilising.
 const HALF_LIFE_DAYS = 120;
 
-const decayed = (value, at) => {
-  const ageDays = (Date.now() - at) / 86400_000;
-  return value * 0.5 ** (ageDays / HALF_LIFE_DAYS);
-};
+const decayFactor = (age) => 0.5 ** (age / 86400_000 / HALF_LIFE_DAYS);
+
+const decayed = (value, at) => value * decayFactor(Date.now() - at);
+
+// How many votes to keep reversible. Long enough to cover a mis-press noticed
+// later in a session, short enough that the profile stays a small file.
+const JOURNAL_LIMIT = 200;
+
+const albumKeyOf = (track) => `${artistKeyOf(track)}::${track.album.toLowerCase()}`;
 
 export function createAffinity() {
   const state = load();
 
   function load() {
     ensureDirs();
-    const empty = { tracks: {}, artists: {}, albums: {}, tags: {} };
+    const empty = { tracks: {}, artists: {}, albums: {}, tags: {}, votes: [] };
     if (!existsSync(AFFINITY_FILE)) return empty;
     try {
       return { ...empty, ...JSON.parse(readFileSync(AFFINITY_FILE, 'utf8')) };
@@ -57,13 +62,109 @@ export function createAffinity() {
    */
   function vote(track, direction, weight = 1) {
     const delta = direction * weight;
-    bump('tracks', identityOf(track), delta * PROPAGATION.track);
-    bump('artists', artistKeyOf(track), delta * PROPAGATION.artist);
-    if (track.album) bump('albums', `${artistKeyOf(track)}::${track.album.toLowerCase()}`, delta * PROPAGATION.album);
+    const changes = [];
+    const apply = (bucket, key, amount) => {
+      if (!key) return;
+      bump(bucket, key, amount);
+      changes.push([bucket, key, amount]);
+    };
+
+    apply('tracks', identityOf(track), delta * PROPAGATION.track);
+    apply('artists', artistKeyOf(track), delta * PROPAGATION.artist);
+    if (track.album) apply('albums', albumKeyOf(track), delta * PROPAGATION.album);
     for (const tag of (track.tags ?? []).slice(0, 5)) {
-      bump('tags', tag.toLowerCase(), delta * PROPAGATION.tag);
+      apply('tags', tag.toLowerCase(), delta * PROPAGATION.tag);
     }
+
+    // Journalled so a mis-press can be reversed exactly, rather than guessed
+    // at from the track later — which would touch tags the vote never reached.
+    state.votes.push({
+      id: identityOf(track),
+      label: `${track.artist} — ${track.name}`,
+      direction,
+      weight,
+      at: Date.now(),
+      changes,
+    });
+    if (state.votes.length > JOURNAL_LIMIT) state.votes.splice(0, state.votes.length - JOURNAL_LIMIT);
+
     save();
+  }
+
+  /**
+   * Reverse a recorded vote.
+   *
+   * Each entry stores what the vote actually added, so undoing subtracts that
+   * same amount decayed by the vote's own age — which is exactly what it still
+   * contributes today. Decay is multiplicative over the whole stored value, so
+   * an old delta keeps shrinking at the same rate whether or not other votes
+   * landed on the key in between; removing the decayed amount therefore leaves
+   * every other vote untouched. (Only a value that hit the ±3 clamp cannot be
+   * unwound precisely.)
+   */
+  function undoVote(entry) {
+    const factor = decayFactor(Date.now() - entry.at);
+    for (const [bucket, key, amount] of entry.changes) {
+      if (!state[bucket]?.[key]) continue;
+      bump(bucket, key, -amount * factor);
+      // A key left at zero holds no opinion; drop it rather than accumulating
+      // dead entries every time a vote is taken back.
+      if (Math.abs(state[bucket][key].value) < 0.005) delete state[bucket][key];
+    }
+    state.votes = state.votes.filter((v) => v !== entry);
+    save();
+    return entry;
+  }
+
+  /** Most recent journalled vote, optionally for one track. */
+  const lastVote = (identity = null) =>
+    [...state.votes].reverse().find((v) => !identity || v.id === identity) ?? null;
+
+  /** Undo the last vote — for a given track, or whatever was voted on last. */
+  function undo(identity = null) {
+    const entry = lastVote(identity);
+    return entry ? undoVote(entry) : null;
+  }
+
+  /**
+   * Reverse a vote that predates the journal, inferring what it touched.
+   *
+   * Nothing records what the old vote actually reached, so this is deliberately
+   * conservative: it only reduces keys that already lean the way the mistake
+   * pushed them, never past zero, and never creates a key. That can leave a
+   * trace behind, but it can't invent an opinion the vote never expressed.
+   */
+  function undoInferred(track, direction = null, weight = null) {
+    // Both the direction and the strength of the mistake are readable from the
+    // track entry, since a vote lands there at full weight — so an accidental
+    // love unwinds as completely as an accidental downvote, without the caller
+    // having to remember which key was pressed.
+    const current = read('tracks', identityOf(track));
+    const sign = direction ?? Math.sign(current);
+    if (!sign) return [];
+    const delta = sign * (weight ?? Math.abs(current) / PROPAGATION.track);
+    const targets = [
+      ['tracks', identityOf(track), delta * PROPAGATION.track],
+      ['artists', artistKeyOf(track), delta * PROPAGATION.artist],
+      ...(track.album ? [['albums', albumKeyOf(track), delta * PROPAGATION.album]] : []),
+      ...(track.tags ?? []).slice(0, 5).map((tag) => ['tags', tag.toLowerCase(), delta * PROPAGATION.tag]),
+    ];
+
+    const undone = [];
+    for (const [bucket, key, amount] of targets) {
+      const prior = state[bucket]?.[key];
+      if (!prior) continue;
+      const current = decayed(prior.value, prior.at);
+      // Same sign as the vote, or the vote isn't what put it there.
+      if (Math.sign(current) !== Math.sign(amount)) continue;
+      const removal = Math.min(Math.abs(amount), Math.abs(current)) * -Math.sign(amount);
+      bump(bucket, key, removal);
+      const after = read(bucket, key);
+      if (Math.abs(after) < 0.005) delete state[bucket][key];
+      undone.push({ bucket, key, before: current, after });
+    }
+    if (undone.length) save();
+    return undone;
   }
 
   const read = (bucket, key) => {
@@ -77,7 +178,7 @@ export function createAffinity() {
    */
   function scoreFor(track) {
     let total = read('tracks', identityOf(track)) + read('artists', artistKeyOf(track));
-    if (track.album) total += read('albums', `${artistKeyOf(track)}::${track.album.toLowerCase()}`);
+    if (track.album) total += read('albums', albumKeyOf(track));
     for (const tag of (track.tags ?? []).slice(0, 5)) total += read('tags', tag.toLowerCase()) * 0.5;
     return Math.max(-4, Math.min(4, total));
   }
@@ -97,5 +198,5 @@ export function createAffinity() {
     tags: Object.keys(state.tags).length,
   });
 
-  return { vote, scoreFor, top, stats };
+  return { vote, undo, undoInferred, lastVote, scoreFor, top, stats };
 }

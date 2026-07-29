@@ -6,6 +6,7 @@ import { loginWeb } from '../src/commands/loginWeb.js';
 import { doctor } from '../src/commands/doctor.js';
 import { status } from '../src/commands/status.js';
 import { sync } from '../src/commands/sync.js';
+import { unvote } from '../src/commands/unvote.js';
 import { MODES, modeNames } from '../src/dj/modes.js';
 import { bold, cyan, dim } from '../src/ui/ansi.js';
 import { error } from '../src/util/log.js';
@@ -35,6 +36,8 @@ function usage() {
     autodj login --fresh            force the browser auth flow
     autodj login --web              enable Last.fm + YTM recommendation feeds
                                     (reads the sessions Firefox already holds)
+    autodj unvote "Artist - Track"  take back a vote cast by mistake
+    autodj unvote                   …take back the most recent one
     autodj sync                     mirror your full Last.fm library locally
     autodj status                   config + listening stats
     autodj doctor                   check mpv, yt-dlp, credentials
@@ -49,7 +52,7 @@ ${modeNames.map((m) => `    --${m.padEnd(12)} ${dim(MODES[m].description)}`).joi
     --help        this
 
   ${bold('keys while playing')}
-    space pause   → next   n skip(-)   ↑/↓ vote   l love   x ban
+    space pause   → next   n skip(-)   ↑/↓ vote   u undo vote   l love   x ban
     b boost (toggle)   m mood   r refill   +/- volume   q quit
 `);
 }
@@ -85,6 +88,8 @@ async function main() {
       });
     case 'login':
       return argv.includes('--web') ? loginWeb() : login({ fresh: Boolean(flag('fresh')) });
+    case 'unvote':
+      return unvote(argv.filter((a) => !a.startsWith('--'))[1] ?? null);
     case 'sync':
       return sync();
     case 'status':

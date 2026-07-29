@@ -402,6 +402,22 @@ export class DjEngine extends EventEmitter {
     return direction < 0 ? this.skip() : track;
   }
 
+  /**
+   * Take back the last vote — the one just cast, or the last one on the track
+   * playing now. A downvote also skips, so by the time you realise it was a
+   * mis-press the track is usually gone; falling back to the most recent vote
+   * of any kind is what makes the undo reach it.
+   */
+  undoVote() {
+    const entry =
+      (this.nowPlaying && this.#affinity.lastVote(identityOf(this.nowPlaying)))
+      || this.#affinity.lastVote();
+    if (!entry) return null;
+    this.#affinity.undo(entry.id);
+    this.emit('unvoted', entry);
+    return entry;
+  }
+
   ban(track = this.nowPlaying) {
     if (!track) return false;
     this.#history.ban(track);

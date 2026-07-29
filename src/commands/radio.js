@@ -169,6 +169,10 @@ export async function radio({
     voteUp: () => engine.vote(+1),
     voteDown: () => engine.vote(-1),
     love: () => engine.love(),
+    undoVote: () => {
+      const entry = engine.undoVote();
+      activity(entry ? `undid      ${entry.direction > 0 ? 'upvote' : 'downvote'} on ${entry.label}` : 'nothing to undo');
+    },
     ban: () => { engine.ban(); return engine.skip(); },
     boost: () => engine.toggleBoost(),
     refill: () => engine.refill(),

@@ -56,6 +56,7 @@ While playing:
 | `→` | next track — **no consequences**, nothing recorded |
 | `n` | skip — recorded as a negative signal against track and artist |
 | `↑` / `↓` | up/down vote — feeds the taste profile |
+| `u` | undo the last vote — the one just cast, or the last on this track |
 | `l` | love on Last.fm **and** strongest positive vote |
 | `x` | ban — never queue this track again |
 | `b` | toggle the scrobble booster on/off, live |
@@ -235,6 +236,21 @@ thousands of tracks and would otherwise swamp every other signal.
 Votes decay with a 120-day half-life, so the profile can change its mind
 instead of fossilising around what you liked last year. `autodj status` shows
 your strongest artist and tag affinities.
+
+Because a vote reaches four places at once, taking one back is not a matter of
+nudging a number the other way. Every vote is journalled with exactly what it
+changed, so `u` — or `autodj unvote` — subtracts precisely that, decayed by the
+vote's own age, leaving every other vote on those keys untouched:
+
+```
+autodj unvote "Bob Marley - Rebel Music"   # take back a vote on one track
+autodj unvote                              # take back the most recent one
+```
+
+Votes cast before the journal existed are reversed by inference instead: the
+direction and strength are read back from the track entry, and each key is only
+reduced toward zero, never past it. That can leave a trace behind, but it
+cannot invent an opinion the vote never expressed.
 
 Stored in `~/.config/autodj/affinity.json`.
 
