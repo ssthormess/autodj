@@ -159,5 +159,102 @@ export function createSearcher(config) {
     return stdout.trim().split('\n')[0] || null;
   }
 
-  return { search, resolve, radioFrom, streamUrl, scoreResult };
+  // YouTube Music's "Songs" search filter. Without it the search returns the
+  // Videos section, which for a genre query is documentaries and DJ sets.
+  const SONGS_FILTER = 'EgWKAQIIAWoKEAoQAxAEEAkQBQ%3D%3D';
+
+  /**
+   * Search the YouTube Music catalogue directly.
+   *
+   * This is the only source with real depth for regional scenes that Last.fm
+   * barely tags: searching "changa tuki" on Last.fm returns almost nothing,
+   * while the YouTube Music catalogue is full of it.
+   *
+   * Two stages, because neither alone is sufficient. A flat search is fast but
+   * returns titles only -- no artist, no duration -- so DJ mixes could not be
+   * told apart from tracks. Full extraction supplies both but costs a request
+   * per entry, so it is applied only to the shortlist the flat pass produced.
+   *
+   * Results are trusted as music without a Last.fm cross-check: the endpoint
+   * serves the music catalogue, and requiring Last.fm to recognise them would
+   * reject exactly the niche material this lane exists to reach.
+   */
+  async function searchMusic(query, limit = 12) {
+    let ids = [];
+    try {
+      const stdout = await ytdlp([
+        `https://music.youtube.com/search?q=${encodeURIComponent(query)}&params=${SONGS_FILTER}`,
+        '--flat-playlist',
+        '--print', 'id',
+        '--playlist-end', String(limit),
+        '--no-warnings',
+      ]);
+      // A YouTube Music search mixes tracks with albums (MPREb…) and
+      // playlists (VLPL…), which are not playable entries. Only genuine
+      // 11-character video ids survive.
+      ids = stdout
+        .split('\n')
+        .map((x) => x.trim())
+        .filter((id) => /^[A-Za-z0-9_-]{11}$/.test(id));
+    } catch (err) {
+      debug(`ytm search failed for "${query}": ${err.message.split('\n')[0]}`);
+      return [];
+    }
+    if (!ids.length) return [];
+
+    let entries = [];
+    try {
+      const stdout = await ytdlp([
+        ...ids.map((id) => `https://music.youtube.com/watch?v=${id}`),
+        '--dump-json',
+        '--skip-download',
+        '--no-warnings',
+        // One bad entry must not abandon the rest of the batch.
+        '--ignore-errors',
+      ]);
+      entries = stdout
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+    } catch (err) {
+      debug(`ytm detail fetch failed for "${query}": ${err.message.split('\n')[0]}`);
+      return [];
+    }
+
+    return entries
+      .map((v) => {
+        const duration = Number(v.duration) || null;
+        // This genre's catalogue is largely hour-long mixes; a radio needs
+        // tracks, so anything outside song length is dropped.
+        if (duration === null || duration < 45 || duration > 900) return null;
+
+        const title = stripYoutubeDecoration(v.title ?? '').trim();
+        const channel = (v.channel ?? v.uploader ?? '').replace(/\s-\sTopic$/, '').trim();
+        const split = title.match(/^(.{1,80}?)\s+[-–—|]\s+(.+)$/);
+
+        const artist = v.artist ?? (split ? split[1] : channel);
+        const name = v.track ?? (split ? split[2] : title);
+        if (!artist || !name) return null;
+
+        return {
+          artist: String(artist).trim(),
+          name: String(name).trim(),
+          videoId: v.id,
+          duration,
+          source: 'ytm-search',
+          seed: query,
+          needsVerification: false,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  return { search, searchMusic, resolve, radioFrom, streamUrl, scoreResult };
 }

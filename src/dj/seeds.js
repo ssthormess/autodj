@@ -38,6 +38,7 @@ export async function buildSeeds(sources, config, { steer = null } = {}) {
       artists: steer.artists ?? [],
       tracks: steer.tracks ?? [],
       tags: steer.tags ?? [],
+      mood: steer.mood ?? null,
       steered: true,
     };
   }

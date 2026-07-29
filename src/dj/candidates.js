@@ -22,7 +22,9 @@ export async function gatherCandidates(sources, seeds, config) {
   // The personal feeds recommend from your history by construction, so leaving
   // them on means the direction you asked for competes with everything you
   // already listen to — and loses.
-  const STEERED_LANES = ['similar-artist', 'artist-top', 'artist-deep', 'tag', 'similar-track'];
+  const STEERED_LANES = [
+    'similar-artist', 'artist-top', 'artist-deep', 'tag', 'similar-track', 'ytm-search',
+  ];
 
   // A mode may restrict which lanes run at all; `null` means "everything".
   const laneAllowed = (name) => {
@@ -162,6 +164,26 @@ export async function gatherCandidates(sources, seeds, config) {
         const body = seeds.steered ? top : top.slice(5);
         return body.map((t) => ({ ...t, source: 'tag', seed: tag.name }));
       }),
+    );
+  }
+
+  /**
+   * Searching the YouTube Music catalogue by name.
+   *
+   * Only used when a mood is steering, and it is what makes regional scenes
+   * reachable at all. Last.fm's tag for "gaitas venezolanas" holds a single
+   * track and "changa tuki" almost nothing, while YouTube Music's catalogue
+   * has both. Queries are capped because each one costs a search plus a
+   * detail fetch.
+   */
+  if (seeds.steered && laneAllowed('ytm-search') && searcher) {
+    const queries = [
+      seeds.mood,
+      ...seeds.tags.slice(0, 2).map((t) => t.name),
+    ].filter(Boolean);
+
+    lanes.push(
+      ...[...new Set(queries)].slice(0, 3).map((q) => searcher.searchMusic(q, 25).catch(() => [])),
     );
   }
 

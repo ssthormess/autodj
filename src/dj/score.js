@@ -19,6 +19,8 @@ const SOURCE_WEIGHT = {
   'similar-track': 1.0,
   'similar-artist': 0.85,
   'ytm-radio': 0.8,
+  // Direct catalogue hits for the exact thing that was asked for.
+  'ytm-search': 1.1,
   'artist-deep': 0.9,
   'user-top': 0.85,
   loved: 0.95,

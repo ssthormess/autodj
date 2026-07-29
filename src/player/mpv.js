@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { MpvIpc } from './ipc.js';
 import { IPC_SOCKET } from '../config/paths.js';
 import { debug } from '../util/log.js';
+import { toMpvVolume } from './volume.js';
 
 /**
  * Audio-only mpv, driven over IPC.
@@ -30,8 +31,9 @@ export class Player extends EventEmitter {
       binary,
       [
         ...args,
-        `--volume=${this.#config.player.volume}`,
-        `--volume-max=${this.#config.player.maxVolume}`,
+        // The configured number is a share of full amplitude; mpv's own scale
+        // is cubic, so it has to be converted rather than passed through.
+        `--volume=${toMpvVolume(this.#config.player.volume).toFixed(2)}`,
         `--input-ipc-server=${IPC_SOCKET}`,
         '--ytdl=yes',
         '--ytdl-format=bestaudio[ext=m4a]/bestaudio/best',
@@ -66,8 +68,9 @@ export class Player extends EventEmitter {
   stop = () => this.#ipc.command('stop');
   togglePause = () => this.#ipc.command('cycle', 'pause');
   seek = (seconds) => this.#ipc.command('seek', seconds, 'relative');
-  setVolume = (v) =>
-    this.#ipc.set('volume', Math.max(0, Math.min(this.#config.player.maxVolume, v)));
+  /** Takes the displayed percentage; converts to mpv's cubic scale. */
+  setVolume = (displayed) =>
+    this.#ipc.set('volume', toMpvVolume(displayed, this.#config.player.maxVolume));
 
   async position() {
     try {
