@@ -213,6 +213,37 @@ export class DjEngine extends EventEmitter {
   }
 
   /**
+   * Step back, the way a transport button is expected to behave: restart the
+   * current track if you are past the opening, otherwise return to the one
+   * before it. The track you were on goes to the head of the queue, so pressing
+   * next brings you straight back rather than losing your place.
+   *
+   * Like `advance`, this records no opinion — a hardware button is navigation,
+   * not judgement.
+   */
+  async previous({ restartAfter = 5 } = {}) {
+    if (this.#stopped) return null;
+
+    const position = await this.#player.position().catch(() => 0);
+    if (this.nowPlaying && position > restartAfter) {
+      await this.#player.restart().catch(() => {});
+      return this.nowPlaying;
+    }
+
+    // Taken before finishing, which unshifts the current track onto the front.
+    const earlier = this.recentlyPlayed.shift();
+    if (!earlier) {
+      await this.#player.restart().catch(() => {});
+      return this.nowPlaying;
+    }
+
+    const current = this.nowPlaying;
+    await this.#finishCurrent({ skipped: false });
+    if (current) this.queue.unshift(current);
+    return this.play(earlier);
+  }
+
+  /**
    * Drop a queued track. No opinion is recorded — it simply is not wanted in
    * this particular set.
    */
@@ -325,6 +356,10 @@ export class DjEngine extends EventEmitter {
     // Drop to silence *before* the file loads, so the opening bar is part of
     // the ramp rather than a burst at full level.
     if (fade?.enabled) await this.#player.fadeTo(0, 0).catch(() => {});
+
+    // Set before the file loads, so macOS never shows the YouTube title next
+    // to the transport buttons in Control Center — not even briefly.
+    await this.#player.setMediaTitle?.(`${playable.artist} — ${playable.name}`);
 
     // A prefetched direct stream starts near-instantly; the watch URL makes
     // mpv run its own extraction first, costing several seconds of silence.

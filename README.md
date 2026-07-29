@@ -54,6 +54,7 @@ While playing:
 |-----|--------|
 | `space` | pause / resume |
 | `→` | next track — **no consequences**, nothing recorded |
+| `←` | previous — restarts the track, or steps back if you just started it |
 | `n` | skip — recorded as a negative signal against track and artist |
 | `↑` / `↓` | up/down vote — feeds the taste profile |
 | `u` | undo the last vote — the one just cast, or the last on this track |
@@ -79,6 +80,24 @@ advancing.
 The **activity** panel logs what the DJ is doing as it happens — tracks
 starting, scrobbles landing, refills, votes, boost advances — alongside any
 warnings. The terminal tab title tracks the current `Artist - Track`.
+
+### Mac media keys
+
+The keyboard's play/pause and next/prev buttons drive autodj, along with
+headset and Bluetooth transport controls, and Control Center shows the current
+`Artist — Track` above them.
+
+macOS does not deliver media keys as keystrokes: `mediaremoted` routes them to
+whichever process registered with `MPRemoteCommandCenter` and is currently the
+Now Playing app. mpv already does this, even started headless, so autodj simply
+rebinds mpv's media keys over IPC and listens for the result. No helper app, no
+Accessibility permission and no global event tap — the buttons reach autodj
+only while it is the thing playing, which is the scope a media button should
+have.
+
+They map to the consequence-free moves: next **advances** rather than skipping,
+so a hardware button never downvotes, and stop pauses rather than quitting, so
+a stray press on a headset cannot tear down the queue.
 
 **Left-click** any track in the up-next list to play it immediately. The rest
 of the queue stays as it is, and the current track is finished neutrally rather

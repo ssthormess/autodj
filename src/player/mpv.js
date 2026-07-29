@@ -7,6 +7,7 @@ import { debug } from '../util/log.js';
 import { toMpvVolume } from './volume.js';
 import { createFader } from './fade.js';
 import { VIS_FILTER } from './levels.js';
+import { bindMediaKeys, mediaAction } from './mediaKeys.js';
 
 /**
  * Audio-only mpv, driven over IPC.
@@ -70,6 +71,10 @@ export class Player extends EventEmitter {
         // what actually reaches the speakers.
         ...(this.#audioFilters().length ? [`--af=${this.#audioFilters().join(',')}`] : []),
         `--input-ipc-server=${IPC_SOCKET}`,
+        // Stated rather than assumed: this is mpv's default, but a user's
+        // mpv.conf can turn it off, and without it the Mac's play/pause and
+        // next/prev buttons never reach us at all.
+        '--input-media-keys=yes',
         '--ytdl=yes',
         '--ytdl-format=bestaudio[ext=m4a]/bestaudio/best',
         // Keep playback smooth over flaky connections.
@@ -91,8 +96,27 @@ export class Player extends EventEmitter {
     await this.#ipc.observe(2, 'pause');
     this.#ipc.on('property-change', (m) => this.emit('property', m.name, m.data));
 
+    // Hardware transport buttons arrive as client-messages once rebound.
+    this.#ipc.on('client-message', (m) => {
+      const action = mediaAction(m);
+      if (action) this.emit('media-key', action);
+    });
+    this.mediaKeys = await bindMediaKeys(this.#ipc);
+    debug(`media keys bound: ${this.mediaKeys.join(', ') || 'none'}`);
+
     return this;
   }
+
+  /**
+   * What macOS shows in Control Center and on the lock screen.
+   *
+   * Without this the Now Playing widget above the transport buttons reads out
+   * the YouTube video title, which is often decorated well past recognition.
+   */
+  setMediaTitle = (title) => this.#ipc?.set('force-media-title', title).catch(() => {});
+
+  /** Back to the top of the current track. */
+  restart = () => this.#ipc.command('seek', 0, 'absolute');
 
   /** mpv's pid, for the resource meter. Null before start() or after quit(). */
   get pid() {

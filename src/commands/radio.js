@@ -201,6 +201,7 @@ export async function radio({
       const t = engine.queue[i];
       if (t) stage = `selected: ${t.artist} — ${t.name}`;
     },
+    previous: () => engine.previous(),
     queuePlay: () => engine.playAt(tui.selectedQueueIndex()),
     queueMenu: () => {
       if (engine.queue.length) tui.openContextMenu(tui.selectedQueueIndex());
@@ -209,6 +210,28 @@ export async function radio({
     logDown: () => tui.scrollLog(3),
     quit: () => shutdown(),
   };
+
+  /**
+   * The Mac's transport buttons.
+   *
+   * Deliberately mapped to the consequence-free moves: a hardware next button
+   * is navigation, not a rejection, so it advances rather than downvoting the
+   * way `n` does. Stop pauses instead of quitting — a stray press on a headset
+   * should not tear down the session and lose the queue.
+   */
+  const mediaActions = {
+    playpause: () => player.togglePause(),
+    play: () => player.togglePause(),
+    pause: () => player.togglePause(),
+    next: () => engine.advance(),
+    prev: () => engine.previous(),
+    stop: () => player.togglePause(),
+  };
+
+  player.on('media-key', (action) => {
+    activity(`media key   ${action}`);
+    Promise.resolve(mediaActions[action]?.()).catch(() => {});
+  });
 
   const tui = createTui({
     mode: mode.label,

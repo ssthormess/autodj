@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { CONFIG_DIR, ensureDirs } from '../config/paths.js';
 import { identityOf } from '../lastfm/correct.js';
@@ -44,9 +44,47 @@ export function createAffinity() {
     }
   }
 
+  let seenMtime = mtimeOf();
+
+  function mtimeOf() {
+    try {
+      return statSync(AFFINITY_FILE).mtimeMs;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Pick up anything written since we last touched the file.
+   *
+   * A radio session runs for hours holding this profile in memory, and writes
+   * it whole on every vote. Without this, `autodj unvote` in another terminal
+   * is silently undone the next time the running session votes — the very
+   * thing the undo exists to prevent. Cheap to avoid: the file is a few kB, so
+   * re-read it before any change rather than trusting a stale copy.
+   */
+  let checkedAt = 0;
+  function refresh({ force = false } = {}) {
+    // Scoring calls this once per candidate, so reads throttle the stat — a
+    // profile edited in another terminal is worth picking up promptly, not
+    // hundreds of times a second. Anything about to *write* must never skip
+    // it, or it writes a stale copy over the newer file.
+    const now = Date.now();
+    if (!force && now - checkedAt < 500) return;
+    checkedAt = now;
+
+    const mtime = mtimeOf();
+    if (mtime === seenMtime) return;
+    const fresh = load();
+    for (const bucket of ['tracks', 'artists', 'albums', 'tags']) state[bucket] = fresh[bucket];
+    state.votes = fresh.votes;
+    seenMtime = mtime;
+  }
+
   const save = () => {
     ensureDirs();
     writeFileSync(AFFINITY_FILE, JSON.stringify(state));
+    seenMtime = mtimeOf();
   };
 
   const bump = (bucket, key, delta) => {
@@ -61,6 +99,7 @@ export function createAffinity() {
    * more than a thumbs-up without needing a separate code path.
    */
   function vote(track, direction, weight = 1) {
+    refresh({ force: true });
     const delta = direction * weight;
     const changes = [];
     const apply = (bucket, key, amount) => {
@@ -91,6 +130,12 @@ export function createAffinity() {
     save();
   }
 
+  /** Most recent journalled vote, optionally for one track. */
+  function lastVote(identity = null) {
+    refresh({ force: true });
+    return [...state.votes].reverse().find((v) => !identity || v.id === identity) ?? null;
+  }
+
   /**
    * Reverse a recorded vote.
    *
@@ -102,7 +147,12 @@ export function createAffinity() {
    * every other vote untouched. (Only a value that hit the ±3 clamp cannot be
    * unwound precisely.)
    */
-  function undoVote(entry) {
+  function undo(identity = null) {
+    // `lastVote` refreshes, so the entry belongs to the array we are about to
+    // filter — matching it by reference afterwards stays valid.
+    const entry = lastVote(identity);
+    if (!entry) return null;
+
     const factor = decayFactor(Date.now() - entry.at);
     for (const [bucket, key, amount] of entry.changes) {
       if (!state[bucket]?.[key]) continue;
@@ -111,19 +161,10 @@ export function createAffinity() {
       // dead entries every time a vote is taken back.
       if (Math.abs(state[bucket][key].value) < 0.005) delete state[bucket][key];
     }
+
     state.votes = state.votes.filter((v) => v !== entry);
     save();
     return entry;
-  }
-
-  /** Most recent journalled vote, optionally for one track. */
-  const lastVote = (identity = null) =>
-    [...state.votes].reverse().find((v) => !identity || v.id === identity) ?? null;
-
-  /** Undo the last vote — for a given track, or whatever was voted on last. */
-  function undo(identity = null) {
-    const entry = lastVote(identity);
-    return entry ? undoVote(entry) : null;
   }
 
   /**
@@ -135,6 +176,7 @@ export function createAffinity() {
    * trace behind, but it can't invent an opinion the vote never expressed.
    */
   function undoInferred(track, direction = null, weight = null) {
+    refresh({ force: true });
     // Both the direction and the strength of the mistake are readable from the
     // track entry, since a vote lands there at full weight — so an accidental
     // love unwinds as completely as an accidental downvote, without the caller
@@ -177,6 +219,7 @@ export function createAffinity() {
    * Returned on roughly the same scale as the other scoring terms.
    */
   function scoreFor(track) {
+    refresh();
     let total = read('tracks', identityOf(track)) + read('artists', artistKeyOf(track));
     if (track.album) total += read('albums', albumKeyOf(track));
     for (const tag of (track.tags ?? []).slice(0, 5)) total += read('tags', tag.toLowerCase()) * 0.5;
@@ -184,6 +227,7 @@ export function createAffinity() {
   }
 
   function top(bucket, limit = 10) {
+    refresh();
     return Object.entries(state[bucket])
       .map(([key, entry]) => ({ key, value: decayed(entry.value, entry.at) }))
       .filter((x) => Math.abs(x.value) > 0.05)

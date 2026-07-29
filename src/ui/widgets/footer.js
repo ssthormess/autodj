@@ -2,7 +2,7 @@ import blessed from 'blessed';
 import { formatBytes } from '../../util/resources.js';
 
 const KEYS = [
-  ['space', 'pause'], ['→', 'next'], ['n', 'skip(-)'], ['↑/↓', 'vote'], ['u', 'undo'], ['l', 'love'],
+  ['space', 'pause'], ['←/→', 'prev/next'], ['n', 'skip(-)'], ['↑/↓', 'vote'], ['u', 'undo'], ['l', 'love'],
   ['x', 'ban'], ['b', 'boost'], ['m', 'mood'], ['r', 'refill'],
   ['+/-', 'vol'], ['pgup/dn', 'vol±10'], ['[/]', 'log'], ['tab', 'pick'], ['⏎', 'play'], ['d', 'drop…'], ['t', 'theme'], ['q', 'quit'],
 ];

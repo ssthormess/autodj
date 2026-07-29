@@ -78,6 +78,7 @@ export function createTui({
   bind(['space'], 'pause');
   bind(['n'], 'skip');
   bind(['right'], 'advance');
+  bind(['left'], 'previous');
   bind(['up'], 'voteUp');
   bind(['down'], 'voteDown');
   bind(['l'], 'love');
