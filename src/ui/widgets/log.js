@@ -12,7 +12,7 @@ const COLOUR = { error: 'red', warn: 'yellow', info: 'cyan', debug: 'gray' };
 export function createLog(parent) {
   const box = blessed.box({
     parent,
-    top: 18,
+    top: 20,
     left: 0,
     right: 0,
     bottom: 3,

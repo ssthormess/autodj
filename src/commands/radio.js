@@ -4,6 +4,7 @@ import { createTui } from '../ui/tui.js';
 import { resolveMode } from '../dj/modes.js';
 import { setVerbose, setSink } from '../util/log.js';
 import { createResourceSampler } from '../util/resources.js';
+import { fetchCoverCells } from '../ui/cover.js';
 
 /**
  * The continuous set.
@@ -58,10 +59,22 @@ export async function radio({
     scrobbled = true;
     activity(`scrobbled  ${name(t)}`);
   });
+  // Artwork is fetched per track and rendered into the card. Deliberately not
+  // awaited: playback must never wait on a thumbnail.
+  let cover = null;
   engine.on('playing', (t) => {
     scrobbled = false;
     stage = null;
+    cover = null;
     activity(`playing    ${name(t)}  (${t.curated ? 'llm' : t.source ?? '?'})`);
+    if (t.image) {
+      fetchCoverCells(t.image, { columns: 16, rows: 8 })
+        .then((cells) => {
+          // Guard against a slow fetch landing after the track moved on.
+          if (engine.nowPlaying === t) cover = cells;
+        })
+        .catch(() => {});
+    }
   });
   engine.on('refilling', () => { stage = 'refilling'; activity('refilling the queue…'); });
   engine.on('refilled', (n, llm) => {
@@ -188,6 +201,7 @@ export async function radio({
       stage,
       messages,
       scrobbled,
+      cover,
       boost: engine.boostEnabled,
       boostAt: engine.boostAt,
       resources: resources.sample(),

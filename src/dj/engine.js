@@ -133,6 +133,12 @@ export class DjEngine extends EventEmitter {
     this.boostAt = Date.now() + delay * 1000;
     this.emit('boost', delay);
 
+    // Ease down across the countdown so the early handover is heard as a
+    // fade rather than the track being cut off mid-bar.
+    if (this.#config.player.fade?.enabled) {
+      this.#player.fadeTo(this.#config.player.fade.outLevel, delay).catch(() => {});
+    }
+
     this.#boostTimer = setTimeout(() => {
       this.#boostTimer = null;
       this.boostAt = null;
@@ -297,11 +303,25 @@ export class DjEngine extends EventEmitter {
     this.#startedAt = Date.now();
     this.#scrobbled = false;
 
+    const fade = this.#config.player.fade;
+    // Drop to silence *before* the file loads, so the opening bar is part of
+    // the ramp rather than a burst at full level.
+    if (fade?.enabled) await this.#player.fadeTo(0, 0).catch(() => {});
+
     // A prefetched direct stream starts near-instantly; the watch URL makes
     // mpv run its own extraction first, costing several seconds of silence.
     await this.#player.play(
       track.streamUrl ?? `https://music.youtube.com/watch?v=${resolved.id}`,
     );
+
+    if (fade?.enabled) {
+      const seconds = fade.inMin + Math.random() * Math.max(0, fade.inMax - fade.inMin);
+      this.fadeSeconds = seconds;
+      // Not awaited: the ramp runs while everything else continues.
+      this.#player.fadeTo(1, seconds).catch(() => {});
+    } else {
+      this.#player.cancelFade?.().catch?.(() => {});
+    }
     await this.#scrobbler.nowPlaying(playable);
 
     this.emit('playing', playable);

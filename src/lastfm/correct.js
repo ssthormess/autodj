@@ -37,6 +37,11 @@ export function createResolver(client, { user = null } = {}) {
           artist: t.artist.name,
           name: t.name,
           album: t.album?.title ?? null,
+          // Largest artwork Last.fm offers; downscaled locally for the UI.
+          image:
+            t.album?.image?.find((i) => i.size === 'extralarge')?.['#text']
+            || t.album?.image?.at(-1)?.['#text']
+            || null,
           mbid: t.mbid || null,
           artistMbid: t.artist.mbid || null,
           // Last.fm gives milliseconds; 0 means "unknown", not "zero length".

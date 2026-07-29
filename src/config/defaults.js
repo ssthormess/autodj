@@ -111,6 +111,21 @@ export const DEFAULTS = {
     // +/- move by this; page up/down by the coarse step.
     volumeStep: 1,
     volumeCoarseStep: 10,
+
+    /**
+     * Fades. These move a multiplier on top of your chosen level, so the
+     * displayed percentage never changes and is restored exactly.
+     */
+    fade: {
+      enabled: true,
+      // Every track eases up from silence over a random time in this range,
+      // so starts don't all feel identical.
+      inMin: 1.5,
+      inMax: 3.0,
+      // While the booster counts down, ease to this fraction of your level,
+      // so the handover is heard as a fade rather than a cut.
+      outLevel: 0.15,
+    },
   },
 
   resolver: {

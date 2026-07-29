@@ -5,6 +5,7 @@ import { MpvIpc } from './ipc.js';
 import { IPC_SOCKET } from '../config/paths.js';
 import { debug } from '../util/log.js';
 import { toMpvVolume } from './volume.js';
+import { createFader } from './fade.js';
 
 /**
  * Audio-only mpv, driven over IPC.
@@ -17,10 +18,39 @@ export class Player extends EventEmitter {
   #process = null;
   #ipc = null;
   #config;
+  // Your level, and the fade multiplier applied on top of it.
+  #baseVolume;
+  #fader;
 
   constructor(config) {
     super();
     this.#config = config;
+    this.#baseVolume = config.player.volume;
+    this.#fader = createFader({
+      apply: (gain) => this.#pushVolume(gain),
+    });
+  }
+
+  /** Send base × fade to mpv, converted onto mpv's cubic scale. */
+  #pushVolume(gain = this.#fader.current()) {
+    const effective = this.#baseVolume * gain;
+    return this.#ipc
+      ?.set('volume', toMpvVolume(effective, this.#config.player.maxVolume))
+      .catch(() => {});
+  }
+
+  /** Ramp the fade multiplier. Leaves the chosen level untouched. */
+  fadeTo(target, seconds) {
+    return this.#fader.to(target, seconds);
+  }
+
+  /** Cancel any ramp and restore full level immediately. */
+  cancelFade() {
+    return this.#fader.set(1);
+  }
+
+  get fadeGain() {
+    return this.#fader.current();
   }
 
   async start() {
@@ -68,9 +98,11 @@ export class Player extends EventEmitter {
   stop = () => this.#ipc.command('stop');
   togglePause = () => this.#ipc.command('cycle', 'pause');
   seek = (seconds) => this.#ipc.command('seek', seconds, 'relative');
-  /** Takes the displayed percentage; converts to mpv's cubic scale. */
-  setVolume = (displayed) =>
-    this.#ipc.set('volume', toMpvVolume(displayed, this.#config.player.maxVolume));
+  /** Takes the displayed percentage; the active fade still applies on top. */
+  setVolume = (displayed) => {
+    this.#baseVolume = Math.max(0, Math.min(this.#config.player.maxVolume, displayed));
+    return this.#pushVolume();
+  };
 
   async position() {
     try {
@@ -97,6 +129,7 @@ export class Player extends EventEmitter {
   }
 
   quit() {
+    this.#fader.clear();
     try {
       this.#ipc?.command('quit');
     } catch {

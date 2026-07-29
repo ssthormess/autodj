@@ -89,6 +89,42 @@ than counted as a skip.
 They are offered separately rather than bundled, because dropping one track
 from one queue and refusing it forever are very different intentions.
 
+### Fades
+
+Every track eases up from silence over a random 1.5–3 seconds, so starts vary
+rather than all sounding the same. When the scrobble booster arms its
+countdown, the level eases down across it, so the early handover is heard as a
+fade instead of the track being cut mid-bar.
+
+Fades move a multiplier on top of your chosen level; the displayed percentage
+never changes and is restored exactly when the ramp ends. The ramp is eased
+rather than linear, because a linear amplitude ramp lurches at the quiet end.
+
+### Album art
+
+The now-playing card carries a thumbnail of the release, drawn with half-block
+characters and truecolor: the upper-half block renders its foreground in the
+top of the cell and its background in the bottom, so one character row carries
+two pixel rows.
+
+Real inline images do exist — iTerm2's OSC 1337, kitty's graphics protocol —
+but they draw outside the character grid, and this UI repaints every second, so
+blessed would erase them on the next frame. Half-blocks stay inside the grid
+where the layout can own them. `ffmpeg` fetches, scales and decodes in one
+pass, which avoids an image library for a 16×8 thumbnail. Artwork comes from
+Last.fm and is cached for 30 days.
+
+### Acoustic analysis
+
+When AcousticBrainz has data for a recording, the analysis panel shows it:
+energy, danceability, and the mood classifiers for happy, aggressive, relaxed,
+acoustic, electronic and instrumental, each as a bar with its raw probability.
+
+These are classifier outputs rather than measurements of taste, so they are
+shown as numbers rather than dressed up as verdicts. Coverage is partial; a
+track without analysis says so instead of showing zeros, which would read as
+"not danceable" rather than "unknown".
+
 ### Volume
 
 The displayed percentage is a share of full amplitude, not mpv's own number.

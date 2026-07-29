@@ -3,6 +3,7 @@ import { createNowPlaying } from './widgets/nowPlaying.js';
 import { createQueue } from './widgets/queue.js';
 import { createLog } from './widgets/log.js';
 import { createFooter } from './widgets/footer.js';
+import { createFeatures } from './widgets/features.js';
 
 /**
  * The player screen.
@@ -55,6 +56,7 @@ export function createTui({ title = 'autodj', mode, onKey, onSelectTrack, onCont
     onSelect: onSelectTrack,
     onContext: (index, at) => showContextMenu(index, at),
   });
+  const features = createFeatures(body);
   const log = createLog(body);
   const footer = createFooter(body);
 
@@ -95,6 +97,7 @@ export function createTui({ title = 'autodj', mode, onKey, onSelectTrack, onCont
     );
     nowPlaying.update(state);
     queue.update(state.queue, state.stage);
+    features.update(state.track);
     log.update(state.messages);
     footer.update(state);
     screen.render();
