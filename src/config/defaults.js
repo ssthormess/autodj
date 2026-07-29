@@ -34,10 +34,11 @@ export const DEFAULTS = {
   },
 
   dj: {
-    // Keep the queue topped up to this many tracks.
-    queueTarget: 12,
+    // Keep the queue topped up to this many tracks. A tall window can show
+    // twenty-odd rows, and a queue of twelve leaves half of it empty.
+    queueTarget: 18,
     // Refill once the queue drops below this.
-    refillAt: 5,
+    refillAt: 6,
     // Never play the same artist more often than once per N tracks.
     artistCooldown: 6,
     // …and never more than this many times in a single queue refill.

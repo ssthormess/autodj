@@ -57,7 +57,12 @@ export function createQueue(parent, { onSelect, onContext }) {
   function update(queue, stage) {
     box.setLabel(` up next (${queue.length}) — click to play${stage ? ` · ${stage}` : ''} `);
 
-    const rows = queue.slice(0, 6).map((t) => {
+    // Show as many as the panel can hold rather than a fixed six. The count
+    // in the label is the real queue length, so a hardcoded slice made the
+    // header and the list disagree — and wasted every row of a tall window.
+    const visible = Math.max(1, (list.height ?? 6) - (list.border ? 2 : 0));
+
+    const rows = queue.slice(0, visible).map((t) => {
       const tag = t.curated ? 'llm' : t.source ?? '?';
       const plays = t.userPlaycount ? `${t.userPlaycount}p` : 'new';
       return `${blessed.escape(t.artist)} {gray-fg}—{/} ${blessed.escape(t.name)}  {gray-fg}${tag} · ${plays}{/}`;
