@@ -2,6 +2,7 @@ import { buildApp } from '../app.js';
 import { createTui } from '../ui/tui.js';
 import { resolveMode } from '../dj/modes.js';
 import { setVerbose, setSink } from '../util/log.js';
+import { createResourceSampler } from '../util/resources.js';
 
 /**
  * The continuous set.
@@ -13,7 +14,6 @@ import { setVerbose, setSink } from '../util/log.js';
  */
 export async function radio({
   mood = null, seedQuery = null, verbose = false, noLlm = false, mode: modeName = null,
-  boost = false,
 } = {}) {
   setVerbose(verbose);
 
@@ -21,7 +21,6 @@ export async function radio({
   const { config, engine, player, history, scrobbler, sources } = await buildApp({
     overrides: {
       ...(noLlm ? { llm: { enabled: false } } : {}),
-      ...(boost ? { scrobble: { boost: { enabled: true } } } : {}),
       dj: { familiarRatio: mode.familiarRatio },
       mode,
     },
@@ -32,21 +31,59 @@ export async function radio({
   let quitting = false;
   let stage = 'starting';
 
+  // Measures this process plus mpv. mpv is polled on a slow cadence so the
+  // meter does not become a noticeable share of what it reports.
+  const resources = createResourceSampler({ pidOf: () => player.pid });
+
   // Log output is captured, never printed: a stray write from a background
   // lane would corrupt the frame.
   const messages = [];
-  setSink((level, text) => {
-    messages.push({ level, text });
+  const push = (level, text) => {
+    const at = new Date();
+    const stamp = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}:${String(at.getSeconds()).padStart(2, '0')}`;
+    messages.push({ level, text: `${stamp}  ${text}` });
     if (messages.length > 200) messages.shift();
-  });
+  };
 
-  engine.on('scrobbled', () => { scrobbled = true; });
-  engine.on('playing', () => { scrobbled = false; stage = null; });
-  engine.on('refilling', () => { stage = 'refilling'; });
-  engine.on('refilled', (n, llm) => { stage = `+${n}${llm ? ' llm' : ''}`; });
-  engine.on('unplayable', (t) => { stage = `no match for ${t.artist}`; });
-  engine.on('refill-error', (err) => { stage = `refill failed: ${err.message}`; });
-  engine.on('empty', () => { stage = 'no candidates — see autodj doctor'; });
+  // Captured library warnings land here too, but they are rare — a panel that
+  // only ever shows failures reads as broken when everything is fine. What
+  // belongs here is what the DJ is actually doing.
+  setSink(push);
+  const activity = (text) => push('info', text);
+
+  const name = (t) => `${t.artist} — ${t.name}`;
+
+  engine.on('scrobbled', (t) => {
+    scrobbled = true;
+    activity(`scrobbled  ${name(t)}`);
+  });
+  engine.on('playing', (t) => {
+    scrobbled = false;
+    stage = null;
+    activity(`playing    ${name(t)}  (${t.curated ? 'llm' : t.source ?? '?'})`);
+  });
+  engine.on('refilling', () => { stage = 'refilling'; activity('refilling the queue…'); });
+  engine.on('refilled', (n, llm) => {
+    stage = `+${n}${llm ? ' llm' : ''}`;
+    activity(`queued ${n} tracks${llm ? ', LLM-sequenced' : ''}`);
+  });
+  engine.on('skipped', (t, at) => activity(`skipped    ${name(t)} at ${Math.round(at)}s (downvoted)`));
+  engine.on('voted', (t, dir) => activity(`${dir > 0 ? 'upvoted   ' : 'downvoted '} ${name(t)}`));
+  engine.on('loved', (t) => activity(`loved      ${name(t)}`));
+  engine.on('boost', (d) => activity(`boost: advancing in ${d.toFixed(0)}s`));
+  engine.on('boost-toggled', (on) => activity(`scrobble booster ${on ? 'ON' : 'OFF'}`));
+  engine.on('unplayable', (t) => {
+    stage = `no match for ${t.artist}`;
+    push('warn', `no playable match for ${name(t)}`);
+  });
+  engine.on('refill-error', (err) => {
+    stage = `refill failed: ${err.message}`;
+    push('error', `refill failed: ${err.message}`);
+  });
+  engine.on('empty', () => {
+    stage = 'no candidates — see autodj doctor';
+    push('error', 'no candidates found — run: autodj doctor');
+  });
 
   if (mood) engine.mood = mood;
 
@@ -64,6 +101,7 @@ export async function radio({
     voteDown: () => engine.vote(-1),
     love: () => engine.love(),
     ban: () => { engine.ban(); return engine.skip(); },
+    boost: () => engine.toggleBoost(),
     refill: () => engine.refill(),
     volumeUp: () => setVolume(volume + 5),
     volumeDown: () => setVolume(volume - 5),
@@ -75,7 +113,7 @@ export async function radio({
   };
 
   const tui = createTui({
-    mode: mode.label + (boost ? ' · boost' : ''),
+    mode: mode.label,
     onKey: (name) => Promise.resolve(actions[name]?.()).catch(() => {}),
     onSelectTrack: (index) => engine.playAt(index).catch(() => {}),
   });
@@ -99,8 +137,9 @@ export async function radio({
       stage,
       messages,
       scrobbled,
-      boost,
+      boost: engine.boostEnabled,
       boostAt: engine.boostAt,
+      resources: resources.sample(),
     });
   }
 
@@ -126,6 +165,7 @@ export async function radio({
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
+  activity(`autodj started — mode ${mode.label}`);
   await draw();
   await setVolume(volume);
 

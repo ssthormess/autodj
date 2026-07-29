@@ -55,6 +55,11 @@ export class Player extends EventEmitter {
     return this;
   }
 
+  /** mpv's pid, for the resource meter. Null before start() or after quit(). */
+  get pid() {
+    return this.#process?.pid ?? null;
+  }
+
   play = (url) => this.#ipc.command('loadfile', url, 'replace');
   stop = () => this.#ipc.command('stop');
   togglePause = () => this.#ipc.command('cycle', 'pause');

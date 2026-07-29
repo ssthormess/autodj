@@ -42,10 +42,6 @@ function usage() {
   ${bold('modes')}
 ${modeNames.map((m) => `    --${m.padEnd(12)} ${dim(MODES[m].description)}`).join('\n')}
 
-  ${bold('playback')}
-    --boost       scrobble booster: advance 5-10s after each track counts
-                  (a scrobble lands at half the track, or 4 min)
-
   ${bold('flags')}
     --mode <name> same as the shortcuts above
     --no-llm      skip the LLM sequencing pass
@@ -53,7 +49,8 @@ ${modeNames.map((m) => `    --${m.padEnd(12)} ${dim(MODES[m].description)}`).joi
     --help        this
 
   ${bold('keys while playing')}
-    space pause   n skip   ↑/↓ vote   l love   b ban   m mood   r refill   +/- volume   q quit
+    space pause   → next   n skip(-)   ↑/↓ vote   l love   x ban
+    b boost (toggle)   m mood   r refill   +/- volume   q quit
 `);
 }
 
@@ -64,7 +61,6 @@ async function main() {
 
   const verbose = argv.includes('--verbose');
   const noLlm = argv.includes('--no-llm');
-  const boost = argv.includes('--boost');
 
   // `--discover` is sugar for `--mode discover`, and so on for each mode.
   const modeShortcut = modeNames.find((m) => argv.includes(`--${m}`));
@@ -78,7 +74,6 @@ async function main() {
         mode,
         verbose,
         noLlm,
-        boost,
       });
     case 'preview':
       return preview({

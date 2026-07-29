@@ -57,7 +57,8 @@ While playing:
 | `n` | skip — recorded as a negative signal against track and artist |
 | `↑` / `↓` | up/down vote — feeds the taste profile |
 | `l` | love on Last.fm **and** strongest positive vote |
-| `b` | ban — never queue this track again |
+| `x` | ban — never queue this track again |
+| `b` | toggle the scrobble booster on/off, live |
 | `m` | set or clear a mood/direction |
 | `r` | force a queue refill |
 | `+` / `-` | volume (shown as a gauge, so you can see the level) |
@@ -68,18 +69,25 @@ scoring and, repeated, bans the track. Moving on because you feel like it
 should not poison the profile, so the arrow does exactly nothing beyond
 advancing.
 
+The **activity** panel logs what the DJ is doing as it happens — tracks
+starting, scrobbles landing, refills, votes, boost advances — alongside any
+warnings. The terminal tab title tracks the current `Artist - Track`.
+
 **Click any track in the up-next list to play it immediately.** The rest of the
 queue stays as it is, and the current track is finished neutrally rather than
 counted as a skip.
 
 ## Scrobble booster
 
-```bash
-autodj --boost              # composes with any mode
-autodj --hits --boost
-```
+Press **`b`** to toggle it on or off at any point during a set — it is not a
+launch flag, so you can switch it on for a stretch and back off again. The
+header shows `⚡boost` while it is active.
 
-Advances 5–10 seconds after the current track scrobbles, instead of playing it
+Turning it on part-way through a track that has already scrobbled arms the
+advance immediately rather than waiting for the next track; turning it off
+cancels an advance already pending.
+
+It advances 5–10 seconds after the current track scrobbles, instead of playing it
 out. A scrobble lands at half the track or four minutes, whichever comes first,
 so this plays roughly the minimum each track needs in order to count. The
 delay is randomised across the window rather than fixed, and the now-playing

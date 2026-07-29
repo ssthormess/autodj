@@ -124,6 +124,7 @@ export class DjEngine extends EventEmitter {
   #scheduleBoost() {
     const { enabled, minDelay, maxDelay } = this.#config.scrobble.boost ?? {};
     if (!enabled || this.#boostTimer) return;
+    if (this.#stopped) return;
 
     const delay = minDelay + Math.random() * Math.max(0, maxDelay - minDelay);
     this.boostAt = Date.now() + delay * 1000;
@@ -136,6 +137,32 @@ export class DjEngine extends EventEmitter {
       // a negative signal the way a real skip is.
       this.advance().catch(() => {});
     }, delay * 1000);
+  }
+
+  get boostEnabled() {
+    return Boolean(this.#config.scrobble.boost?.enabled);
+  }
+
+  /**
+   * Turn the booster on or off mid-set.
+   *
+   * Switching it on while the current track has already scrobbled arms the
+   * advance immediately, so the toggle takes effect on the track you are
+   * listening to rather than only on the next one. Switching it off cancels
+   * any advance already pending.
+   */
+  toggleBoost() {
+    const boost = this.#config.scrobble.boost;
+    boost.enabled = !boost.enabled;
+
+    if (!boost.enabled) {
+      this.#clearBoost();
+    } else if (this.#scrobbled && this.nowPlaying) {
+      this.#scheduleBoost();
+    }
+
+    this.emit('boost-toggled', boost.enabled);
+    return boost.enabled;
   }
 
   #clearBoost() {
