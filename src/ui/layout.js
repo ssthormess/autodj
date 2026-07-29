@@ -19,6 +19,9 @@ const HEADER_HEIGHT = 1;
 const LOG_MIN = 7;
 const LOG_MAX = 14;
 
+// Enough for a current line plus context either side, and its border.
+const LYRICS_HEIGHT = 7;
+
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
 export function computeLayout(width, height, { keyRows = 1 } = {}) {
@@ -42,12 +45,20 @@ export function computeLayout(width, height, { keyRows = 1 } = {}) {
   const logHeight = spare < 8
     ? Math.max(0, Math.min(3, spare - 3))
     : clamp(Math.round(spare * 0.3), LOG_MIN, LOG_MAX);
-  const middleHeight = Math.max(3, spare - logHeight);
-  const logTop = middleTop + middleHeight;
+
+  // Lyrics only appear when there is genuinely room for them; on a short
+  // window the queue matters more than following along.
+  const lyricsHeight = spare - logHeight >= LYRICS_HEIGHT + 5 ? LYRICS_HEIGHT : 0;
+  const middleHeight = Math.max(3, spare - logHeight - lyricsHeight);
+  const lyricsTop = middleTop + middleHeight;
+  const logTop = lyricsTop + lyricsHeight;
 
   const base = {
     twoColumn,
     nowPlaying: { top, left: 0, right: 0, height: cardHeight },
+    lyrics: lyricsHeight
+      ? { top: lyricsTop, left: 0, right: 0, height: lyricsHeight }
+      : { top: lyricsTop, left: 0, right: 0, height: 1, hidden: true },
     log: logHeight >= 3
       ? { top: logTop, left: 0, right: 0, height: logHeight }
       : { top: logTop, left: 0, right: 0, height: 1, hidden: true },

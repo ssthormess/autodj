@@ -5,6 +5,7 @@ import { createLog } from './widgets/log.js';
 import { createFooter } from './widgets/footer.js';
 import { createFeatures } from './widgets/features.js';
 import { createVisualizer } from './widgets/visualizer.js';
+import { createLyrics } from './widgets/lyrics.js';
 import { computeLayout, applyRect } from './layout.js';
 import { footerRows } from './widgets/footer.js';
 import { resolveTheme, nextTheme } from './theme.js';
@@ -66,6 +67,7 @@ export function createTui({
     onContext: (index, at) => showContextMenu(index, at),
   });
   const features = createFeatures(body);
+  const lyrics = createLyrics(body);
   const visualizer = createVisualizer(body, { columns: 24 });
   const log = createLog(body);
   const footer = createFooter(body);
@@ -114,6 +116,9 @@ export function createTui({
     // Hidden rather than squashed when the window is too short for it.
     if (l.features.hidden) features.box.hide();
     else features.box.show();
+    applyRect(lyrics.box, l.lyrics);
+    if (l.lyrics.hidden) lyrics.box.hide();
+    else lyrics.box.show();
     applyRect(log.box, l.log);
     if (l.log.hidden) log.box.hide();
     else log.box.show();
@@ -129,7 +134,7 @@ export function createTui({
       height: 1,
     });
 
-    for (const el of [nowPlaying.box, queue.box, features.box, log.box, footer.box]) {
+    for (const el of [nowPlaying.box, queue.box, features.box, lyrics.box, log.box, footer.box]) {
       el.style.border.fg = theme.border;
     }
   }
@@ -165,6 +170,7 @@ export function createTui({
     nowPlaying.update(state);
     queue.update(state.queue, state.stage);
     features.update(state.track);
+    lyrics.update(state.lyrics, state.position, theme);
     visualizer.update(state.levels, theme);
     log.update(state.messages);
     footer.update(state, theme);

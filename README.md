@@ -99,6 +99,22 @@ The menu offers:
 They are offered separately rather than bundled, because dropping one track
 from one queue and refusing it forever are very different intentions.
 
+## Lyrics
+
+Time-synced lyrics come from [LRCLIB](https://lrclib.net), a free, open,
+community-contributed LRC database. It needs no API key and no account, which
+is what makes it usable here — Musixmatch requires a commercial licence for
+synced lyrics, and the alternatives are unofficial endpoints that break.
+
+The panel sits full width between the queue/analysis row and the activity log.
+The current line is centred and highlighted with context dimmed either side,
+following playback. Nothing is stored beyond the local cache (30 days).
+
+Coverage is partial and a miss is unremarkable, so the panel says which case
+applies — no contribution, instrumental, or a transcription that exists but
+isn't timed — rather than sitting blank and looking broken. It hides entirely
+on a window too short to spare the rows.
+
 ### Layout, themes and the level meter
 
 The layout is computed from the terminal size and recomputed on every resize.

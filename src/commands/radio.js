@@ -6,6 +6,7 @@ import { setVerbose, setSink } from '../util/log.js';
 import { createResourceSampler } from '../util/resources.js';
 import { fetchCoverCells, defaultCoverCells } from '../ui/cover.js';
 import { createLevelReader } from '../player/levels.js';
+import { createLyricsSource } from '../lyrics/lrclib.js';
 
 /**
  * The continuous set.
@@ -43,6 +44,10 @@ export async function radio({
   const levels = createLevelReader((prop) => player.getProperty(prop));
   let levelSample = null;
 
+  // Synced lyrics, fetched per track. Never awaited by playback.
+  const lyricsSource = createLyricsSource();
+  let lyrics = null;
+
   // Log output is captured, never printed: a stray write from a background
   // lane would corrupt the frame.
   const messages = [];
@@ -75,6 +80,14 @@ export async function radio({
     // artwork arrives — the card never sits empty.
     cover = defaultCoverCells(`${t.artist}::${t.album ?? ''}`, { columns: 18, rows: 9 });
     levels.reset();
+    lyrics = null;
+    lyricsSource
+      .fetchFor(t)
+      .then((found) => {
+        // Discard a slow lookup that lands after the track has moved on.
+        if (engine.nowPlaying === t) lyrics = found ?? { instrumental: false, synced: [], plain: null };
+      })
+      .catch(() => {});
     activity(`playing    ${name(t)}  (${t.curated ? 'llm' : t.source ?? '?'})`);
     if (t.image) {
       fetchCoverCells(t.image, { columns: 18, rows: 9 })
@@ -237,6 +250,7 @@ export async function radio({
       scrobbled,
       cover,
       levels: levelSample,
+      lyrics,
       boost: engine.boostEnabled,
       boostAt: engine.boostAt,
       resources: resources.sample(),
