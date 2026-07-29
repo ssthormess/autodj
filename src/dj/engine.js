@@ -183,7 +183,9 @@ export class DjEngine extends EventEmitter {
     boost.enabled = !boost.enabled;
 
     if (!boost.enabled) {
-      this.#clearBoost();
+      // Turning the booster off mid-countdown is the common way to end up
+      // stuck at the handover level for the rest of the track.
+      this.#clearBoost({ restoreVolume: Boolean(this.nowPlaying) });
     } else if (this.#scrobbled && this.nowPlaying) {
       this.#scheduleBoost();
     }
@@ -192,10 +194,24 @@ export class DjEngine extends EventEmitter {
     return boost.enabled;
   }
 
-  #clearBoost() {
+  /**
+   * Cancel a pending boost advance.
+   *
+   * The countdown eases the volume down to the handover level, so anything
+   * that cancels it *while the track keeps playing* has to undo that too —
+   * otherwise the rest of the song plays at a fraction of the chosen level and
+   * nothing ever puts it back. Callers that are about to start a new track
+   * leave `restoreVolume` off, since `play()` runs its own fade-in.
+   */
+  #clearBoost({ restoreVolume = false } = {}) {
+    const wasPending = Boolean(this.#boostTimer);
     if (this.#boostTimer) clearTimeout(this.#boostTimer);
     this.#boostTimer = null;
     this.boostAt = null;
+
+    if (wasPending && restoreVolume && this.#config.player.fade?.enabled) {
+      this.#player.fadeTo(1, 0.4).catch(() => {});
+    }
   }
 
   /**
@@ -226,6 +242,8 @@ export class DjEngine extends EventEmitter {
 
     const position = await this.#player.position().catch(() => 0);
     if (this.nowPlaying && position > restartAfter) {
+      // Playing the track again means any pending handover no longer applies.
+      this.#clearBoost({ restoreVolume: true });
       await this.#player.restart().catch(() => {});
       return this.nowPlaying;
     }

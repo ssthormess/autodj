@@ -21,10 +21,11 @@ import { resolveTheme, nextTheme } from './theme.js';
  */
 export function createTui({
   title = 'autodj', mode, theme: themeName = 'midnight',
-  onKey, onSelectTrack, onContextAction,
+  onKey, onSelectTrack, onContextAction, onCoverSize,
 }) {
   let themeKey = themeName;
   let theme = resolveTheme(themeKey);
+  let coverSize = { columns: 0, rows: 0 };
   // blessed parses the terminfo database on construction and writes a
   // "Error on xterm-256color.Setulc" line to stderr for capabilities it cannot
   // handle. It is harmless, but it lands in the middle of the display, so it
@@ -113,6 +114,9 @@ export function createTui({
     const l = computeLayout(screen.width, screen.height, { keyRows: rows });
 
     applyRect(nowPlaying.box, l.nowPlaying);
+    // The card places its own contents: both the artwork's size and the width
+    // left for text follow from the height the layout just handed it.
+    nowPlaying.layout();
     applyRect(queue.box, l.queue);
     applyRect(features.box, l.features);
     // Hidden rather than squashed when the window is too short for it.
@@ -126,15 +130,30 @@ export function createTui({
     else log.box.show();
     applyRect(footer.box, l.footer);
 
-    // The meter lives on the now-playing card, under the badges. It goes
-    // through applyRect like everything else: assigning width directly leaves
-    // blessed computing NaN, which is what scrambled the display before.
-    applyRect(visualizer.box, {
-      top: l.nowPlaying.top + 8,
-      left: 1,
-      width: Math.max(8, Math.min(28, screen.width - 22)),
-      height: 1,
-    });
+    // The meter lives on the now-playing card, on whichever row the card says
+    // is free. It goes through applyRect like everything else: assigning width
+    // directly leaves blessed computing NaN, which scrambled the display before.
+    const meterRow = nowPlaying.visualizerRow();
+    if (meterRow === null) {
+      visualizer.box.hide();
+    } else {
+      visualizer.box.show();
+      applyRect(visualizer.box, {
+        // +1 clears the card's own border row.
+        top: l.nowPlaying.top + 1 + meterRow,
+        left: 1,
+        width: Math.max(8, Math.min(28, screen.width - 22)),
+        height: 1,
+      });
+    }
+
+    // Artwork is rendered at a fixed cell size, so a card that changed height
+    // needs it re-rendered rather than stretched.
+    const size = nowPlaying.coverSize();
+    if (size.columns !== coverSize.columns || size.rows !== coverSize.rows) {
+      coverSize = size;
+      onCoverSize?.(size);
+    }
 
     for (const el of [nowPlaying.box, queue.box, features.box, lyrics.box, log.box, footer.box]) {
       el.style.border.fg = theme.border;
@@ -176,6 +195,18 @@ export function createTui({
     visualizer.update(state.levels, theme);
     log.update(state.messages);
     footer.update(state, theme);
+    screen.render();
+  }
+
+  /**
+   * Advance the scrolling text between state updates.
+   *
+   * Player state is polled once a second, which is far too coarse for a
+   * marquee — a title would lurch a character at a time. This repaints only the
+   * text lines, so a smooth scroll costs no extra IPC round trips.
+   */
+  function animate(frame) {
+    nowPlaying.tick(frame);
     screen.render();
   }
 
@@ -267,7 +298,8 @@ export function createTui({
   relayout();
 
   return {
-    screen, render, prompt, setTitle, destroy, cycleTheme, relayout,
+    screen, render, animate, prompt, setTitle, destroy, cycleTheme, relayout,
+    coverSize: () => nowPlaying.coverSize(),
     moveQueueSelection: (delta, length) => {
       const index = queue.moveSelection(delta, length);
       screen.render();

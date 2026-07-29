@@ -35,6 +35,8 @@ autodj radio --from "Bloc Party - Coming on Strong"
 autodj preview --discover           # dry-run a set: no audio, no scrobbles
 autodj preview --resolve            # …and verify each track exists on YT Music
 autodj login --web                  # enable the Last.fm + YTM recommendation feeds
+autodj app                          # install AutoDJ.app — own window, own Dock icon
+autodj unvote "Artist - Track"      # take back a vote cast by mistake
 autodj status
 autodj doctor
 ```
@@ -80,6 +82,32 @@ advancing.
 The **activity** panel logs what the DJ is doing as it happens — tracks
 starting, scrobbles landing, refills, votes, boost advances — alongside any
 warnings. The terminal tab title tracks the current `Artist - Track`.
+
+Text that doesn't fit its column — a long title, a long artist — scrolls back
+and forth instead of being cut off, so the window never needs resizing to read
+it. It pauses at each end long enough to actually read, and ping-pongs rather
+than wrapping, because a wrap splits the title across the join exactly when you
+are trying to read it.
+
+### As a Mac app
+
+```
+autodj app                    # installs ~/Applications/AutoDJ.app
+autodj app --icon cover.png   # …with your own icon
+```
+
+Double-clicking opens **one dedicated terminal window** named `AutoDJ` rather
+than a tab in whatever window happens to be in front — which is what makes a
+session impossible to find again. Launching it a second time raises that window
+instead of starting another radio, so the Dock icon behaves like any other
+app's. Right-click it in the Dock → Options → Keep in Dock to keep it there.
+
+One honest caveat: while it runs, the Dock icon showing the *window* belongs to
+the terminal emulator, because a TUI has to live in one. Getting a genuinely
+separate running icon would mean shipping a terminal emulator inside the bundle.
+
+No icon is generated for you — pass `--icon` with a square PNG and `sips` and
+`iconutil` (both built into macOS) turn it into the `.icns`.
 
 ### Mac media keys
 

@@ -73,12 +73,30 @@ export async function radio({
   // Artwork is fetched per track and rendered into the card. Deliberately not
   // awaited: playback must never wait on a thumbnail.
   let cover = null;
+  // Artwork is rendered to a fixed grid of cells, so it has to be drawn at the
+  // size the card actually ended up — which changes with the window.
+  let coverSize = { columns: 18, rows: 9 };
+
+  /** Draw the current track's artwork at `coverSize`, placeholder first. */
+  function paintCover(t) {
+    if (!t) return;
+    // Fall back immediately to generated art, then replace it if real
+    // artwork arrives — the card never sits empty.
+    cover = defaultCoverCells(`${t.artist}::${t.album ?? ''}`, coverSize);
+    if (!t.image) return;
+    fetchCoverCells(t.image, coverSize)
+      .then((cells) => {
+        // Guard against a slow fetch landing after the track moved on, and
+        // keep the placeholder when the release genuinely has no art.
+        if (cells && engine.nowPlaying === t) cover = cells;
+      })
+      .catch(() => {});
+  }
+
   engine.on('playing', (t) => {
     scrobbled = false;
     stage = null;
-    // Fall back immediately to generated art, then replace it if real
-    // artwork arrives — the card never sits empty.
-    cover = defaultCoverCells(`${t.artist}::${t.album ?? ''}`, { columns: 18, rows: 9 });
+    paintCover(t);
     levels.reset();
     lyrics = null;
     lyricsSource
@@ -89,15 +107,6 @@ export async function radio({
       })
       .catch(() => {});
     activity(`playing    ${name(t)}  (${t.curated ? 'llm' : t.source ?? '?'})`);
-    if (t.image) {
-      fetchCoverCells(t.image, { columns: 18, rows: 9 })
-        .then((cells) => {
-          // Guard against a slow fetch landing after the track moved on, and
-          // keep the placeholder when the release genuinely has no art.
-          if (cells && engine.nowPlaying === t) cover = cells;
-        })
-        .catch(() => {});
-    }
   });
   engine.on('refilling', () => { stage = 'refilling'; activity('refilling the queue…'); });
   engine.on('refilled', (n, llm) => {
@@ -236,6 +245,12 @@ export async function radio({
   const tui = createTui({
     mode: mode.label,
     theme: config.ui.theme,
+    // A resize changes how much of the card the artwork gets, and half-block
+    // cells can't be scaled after the fact — so redraw at the new size.
+    onCoverSize: (size) => {
+      coverSize = size;
+      paintCover(engine.nowPlaying);
+    },
     onKey: (name) => Promise.resolve(actions[name]?.()).catch(() => {}),
     onSelectTrack: (index) => engine.playAt(index).catch(() => {}),
     onContextAction: (index, action) => {
@@ -291,10 +306,21 @@ export async function radio({
     await draw();
   }, 1000);
 
+  // Scrolling text needs a far finer cadence than the once-a-second state
+  // poll, but nothing it draws depends on the player — so it repaints the text
+  // lines alone rather than dragging three IPC reads along with it.
+  let frame = 0;
+  const marqueeTimer = setInterval(() => {
+    if (quitting) return;
+    frame += 1;
+    tui.animate(frame);
+  }, 90);
+
   async function shutdown() {
     if (quitting) return;
     quitting = true;
     clearInterval(timer);
+    clearInterval(marqueeTimer);
     if (volumeWrite) {
       clearTimeout(volumeWrite);
       try { saveConfig(merge(loadConfig(), { player: { volume } })); } catch { /* best effort */ }

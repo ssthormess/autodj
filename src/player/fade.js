@@ -10,10 +10,16 @@
 export function createFader({ apply, intervalMs = 50 }) {
   let timer = null;
   let gain = 1;
+  // Settles whatever ramp is in flight, so a caller awaiting a fade that got
+  // superseded is released instead of waiting on a promise nothing will ever
+  // resolve.
+  let abandon = null;
 
   const clear = () => {
     if (timer) clearInterval(timer);
     timer = null;
+    abandon?.();
+    abandon = null;
   };
 
   /** Current multiplier, 0..1. */
@@ -39,6 +45,14 @@ export function createFader({ apply, intervalMs = 50 }) {
     let step = 0;
 
     return new Promise((resolve) => {
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        resolve(gain);
+      };
+      abandon = settle;
+
       const mine = setInterval(() => {
         step += 1;
         const progress = Math.min(1, step / steps);
@@ -48,10 +62,10 @@ export function createFader({ apply, intervalMs = 50 }) {
         apply(gain);
 
         if (progress >= 1) {
-          if (timer === mine) clear();
           gain = goal;
           apply(gain);
-          resolve(gain);
+          if (timer === mine) clear();
+          settle();
         }
       }, intervalMs);
       timer = mine;
