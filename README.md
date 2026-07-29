@@ -111,7 +111,6 @@ A refill runs many independent candidate lanes in parallel, then narrows:
 | `lastfm-library` | Last.fm web session | your scrobbled catalogue, shuffled |
 | `ytm-rec` | YouTube session | YouTube's recommendation feed |
 | `ytm-liked` | YouTube session | your Liked Music playlist |
-| `ytm-history` | YouTube session | your watch history |
 | `lb-cf` | ListenBrainz | genuine collaborative-filtering model output |
 | `lb-similar` | ListenBrainz | co-listening neighbours, no account required |
 | `similar-track` | Last.fm API | track-level neighbours — the tightest graph signal |
