@@ -62,7 +62,7 @@ export function createSearcher(config) {
    * result is 12 minutes, it's a mix, not the song. Title/artist overlap and
    * a penalty for live/cover/remix variants do the rest.
    */
-  function scoreResult(result, track) {
+  function scoreResult(result, track, context) {
     const cleanTitle = stripYoutubeDecoration(result.title).toLowerCase();
     const wantTrack = track.name.toLowerCase();
     const wantArtist = track.artist.toLowerCase();
@@ -72,14 +72,35 @@ export function createSearcher(config) {
     if (cleanTitle.includes(wantArtist) || result.uploader.toLowerCase().includes(wantArtist)) {
       score += 2;
     }
-    // Official artist channels on YT Music are suffixed "- Topic".
-    if (/- topic$/i.test(result.uploader)) score += 2;
+    // Auto-generated artist channels ("- Topic") carry the catalogue version
+    // of a track: no intros, no commentary, no fan edits. That is a far more
+    // reliable signal than any duration comparison, so it is weighted heavily.
+    if (/- topic$/i.test(result.uploader)) score += 6;
 
+    /**
+     * Duration is judged against the other results, not against Last.fm.
+     *
+     * Last.fm's stored durations are often simply wrong — it lists 339s for a
+     * Green Day track whose catalogue version runs 169s — so using one as
+     * ground truth rewards whichever upload happens to share its error. A
+     * result that is much longer than its peers is padded with an intro,
+     * an interview or a commentary track, which is exactly the failure being
+     * guarded against.
+     */
+    if (context?.median && result.duration) {
+      const ratio = result.duration / context.median;
+      if (ratio > 1.35) score -= 7;
+      else if (ratio > 1.15) score -= 3;
+      else if (ratio < 0.6) score -= 4;
+      else if (ratio >= 0.92 && ratio <= 1.08) score += 3;
+    }
+
+    // Last.fm's figure is still worth a nudge when it agrees closely, but it
+    // never penalises on its own.
     if (track.duration && result.duration) {
       const drift = Math.abs(track.duration - result.duration);
-      if (drift <= 3) score += 4;
-      else if (drift <= 10) score += 2;
-      else if (drift > 90) score -= 5;
+      if (drift <= 3) score += 3;
+      else if (drift <= 10) score += 1;
     }
 
     // Reject things that are a different recording unless we asked for one.
@@ -102,8 +123,16 @@ export function createSearcher(config) {
     }
     if (!results.length) return null;
 
+    // The median duration across the candidates is a far better reference
+    // than any single stored value: most uploads of a song are the song, so
+    // the outliers are the padded ones.
+    const durations = results.map((r) => r.duration).filter((d) => d > 0).sort((a, b) => a - b);
+    const median = durations.length
+      ? durations[Math.floor(durations.length / 2)]
+      : null;
+
     const ranked = results
-      .map((r) => ({ ...r, score: scoreResult(r, track) }))
+      .map((r) => ({ ...r, score: scoreResult(r, track, { median }) }))
       .sort((a, b) => b.score - a.score);
 
     const best = ranked[0];

@@ -64,6 +64,13 @@ export class Player extends EventEmitter {
         // The configured number is a share of full amplitude; mpv's own scale
         // is cubic, so it has to be converted rather than passed through.
         `--volume=${toMpvVolume(this.#config.player.volume).toFixed(2)}`,
+        ...(this.#config.player.normalize?.enabled
+          ? [
+            `--af=lavfi=[loudnorm=I=${this.#config.player.normalize.target}`
+              + `:TP=${this.#config.player.normalize.truePeak}`
+              + `:LRA=${this.#config.player.normalize.range}]`,
+          ]
+          : []),
         `--input-ipc-server=${IPC_SOCKET}`,
         '--ytdl=yes',
         '--ytdl-format=bestaudio[ext=m4a]/bestaudio/best',

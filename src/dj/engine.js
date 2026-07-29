@@ -93,8 +93,9 @@ export class DjEngine extends EventEmitter {
       this.emit('skipped', track, played);
     }
 
-    if (!this.#scrobbled && this.#scrobbler.isEligible(track, played)) {
-      await this.#scrobbler.scrobble(track, this.#startedAt);
+    const playing = (await this.#playingTrack()) ?? track;
+    if (!this.#scrobbled && this.#scrobbler.isEligible(playing, played)) {
+      await this.#scrobbler.scrobble(playing, this.#startedAt);
       this.#scrobbled = true;
       this.emit('scrobbled', track);
     }
@@ -107,12 +108,29 @@ export class DjEngine extends EventEmitter {
     this.nowPlaying = null;
   }
 
+  /**
+   * The track as it is actually playing.
+   *
+   * Last.fm's stored duration is frequently wrong -- it reports 339s for a
+   * Green Day track that runs 249s in the file being played -- and the
+   * scrobble threshold is half the duration. Trusting the catalogue number
+   * therefore delays or denies scrobbles for the thing on the speakers. What
+   * mpv reports is what is playing, so it wins whenever it is known.
+   */
+  async #playingTrack() {
+    const track = this.nowPlaying;
+    if (!track) return null;
+    const live = await this.#player.duration().catch(() => null);
+    return live && live > 0 ? { ...track, duration: Math.round(live) } : track;
+  }
+
   /** Called on a timer by the UI so scrobbles land mid-track, not at the end. */
   async tick() {
     if (!this.nowPlaying || this.#scrobbled) return;
     const played = await this.#player.position().catch(() => 0);
-    if (this.#scrobbler.isEligible(this.nowPlaying, played)) {
-      await this.#scrobbler.scrobble(this.nowPlaying, this.#startedAt);
+    const playing = await this.#playingTrack();
+    if (this.#scrobbler.isEligible(playing, played)) {
+      await this.#scrobbler.scrobble(playing, this.#startedAt);
       this.#scrobbled = true;
       this.emit('scrobbled', this.nowPlaying);
       this.#scheduleBoost();

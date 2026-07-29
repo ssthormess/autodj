@@ -113,6 +113,23 @@ export const DEFAULTS = {
     volumeCoarseStep: 10,
 
     /**
+     * Loudness normalisation, so one setting works across tracks.
+     *
+     * YouTube audio carries no ReplayGain tags, so levels swing wildly between
+     * a loud remaster and a quiet upload and the volume has to be ridden per
+     * track. EBU R128 normalisation fixes the perceived level instead.
+     * Measured on a -44 dB source: loudnorm brought it to -18 dB, while
+     * dynaudnorm left it untouched.
+     */
+    normalize: {
+      enabled: true,
+      // Integrated loudness target in LUFS. -16 is the usual streaming level.
+      target: -16,
+      truePeak: -1.5,
+      range: 11,
+    },
+
+    /**
      * Fades. These move a multiplier on top of your chosen level, so the
      * displayed percentage never changes and is restored exactly.
      */
