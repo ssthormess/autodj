@@ -18,8 +18,17 @@ export async function gatherCandidates(sources, seeds, config) {
   const mode = config.mode ?? null;
   const lanes = [];
 
+  // While a mood is steering, only lanes that follow the given seeds may run.
+  // The personal feeds recommend from your history by construction, so leaving
+  // them on means the direction you asked for competes with everything you
+  // already listen to — and loses.
+  const STEERED_LANES = ['similar-artist', 'artist-top', 'artist-deep', 'tag', 'similar-track'];
+
   // A mode may restrict which lanes run at all; `null` means "everything".
-  const laneAllowed = (name) => !mode?.lanes || mode.lanes.includes(name);
+  const laneAllowed = (name) => {
+    if (seeds.steered) return STEERED_LANES.includes(name);
+    return !mode?.lanes || mode.lanes.includes(name);
+  };
 
   // ---- Last.fm's own recommendation stations (logged-in web session) -------
   if (config.sources.lastfmWeb && web) {
@@ -147,8 +156,11 @@ export async function gatherCandidates(sources, seeds, config) {
     lanes.push(
       ...seeds.tags.map(async (tag) => {
         const top = await tagSource.tagTopTracks(tag.name, 40).catch(() => []);
-        // Skip the very top of a tag chart — that's where the obvious lives.
-        return top.slice(5).map((t) => ({ ...t, source: 'tag', seed: tag.name }));
+        // Normally the head of a tag chart is skipped as too obvious. When a
+        // mood picked the tag, that head *is* the answer — it is the canon of
+        // the genre that was asked for.
+        const body = seeds.steered ? top : top.slice(5);
+        return body.map((t) => ({ ...t, source: 'tag', seed: tag.name }));
       }),
     );
   }

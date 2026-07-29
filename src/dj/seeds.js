@@ -31,7 +31,15 @@ export async function buildSeeds(sources, config, { steer = null } = {}) {
   const { user } = sources;
 
   if (steer) {
-    return { artists: steer.artists ?? [], tracks: steer.tracks ?? [], tags: steer.tags ?? [] };
+    // Flagged so candidate generation can shut off the personal-history lanes.
+    // A mood that still pulls your Last.fm stations and YouTube feeds is a
+    // mood that gets drowned out by your existing taste.
+    return {
+      artists: steer.artists ?? [],
+      tracks: steer.tracks ?? [],
+      tags: steer.tags ?? [],
+      steered: true,
+    };
   }
 
   const [overall, recent3m, loved, recent] = await Promise.all([

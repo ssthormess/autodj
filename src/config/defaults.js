@@ -102,8 +102,12 @@ export const DEFAULTS = {
   player: {
     binary: 'mpv',
     // Audio only, no window, no video decode.
-    args: ['--no-video', '--no-terminal', '--idle=yes', '--volume=85'],
-    volume: 85,
+    args: ['--no-video', '--no-terminal', '--idle=yes'],
+    // Persisted: whatever you last set with +/- is what you get next time.
+    volume: 70,
+    // mpv refuses anything above 100 unless told otherwise, so the gauge and
+    // the clamp both key off this rather than assuming a range.
+    maxVolume: 100,
   },
 
   resolver: {

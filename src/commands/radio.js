@@ -1,4 +1,5 @@
 import { buildApp } from '../app.js';
+import { loadConfig, saveConfig, merge } from '../config/config.js';
 import { createTui } from '../ui/tui.js';
 import { resolveMode } from '../dj/modes.js';
 import { setVerbose, setSink } from '../util/log.js';
@@ -72,6 +73,17 @@ export async function radio({
   engine.on('loved', (t) => activity(`loved      ${name(t)}`));
   engine.on('boost', (d) => activity(`boost: advancing in ${d.toFixed(0)}s`));
   engine.on('boost-toggled', (on) => activity(`scrobble booster ${on ? 'ON' : 'OFF'}`));
+  engine.on('mood-resolving', (m) => {
+    stage = `working out what "${m}" means…`;
+    activity(`mood "${m}" — resolving to searchable genres/artists`);
+  });
+  engine.on('mood', (m, steer) => {
+    if (!m) return activity('mood cleared — back to your history');
+    if (!steer) return push('warn', `mood "${m}" matched nothing searchable; using your history`);
+    const t = steer.tags.map((x) => x.name).join(', ') || 'none';
+    const a = steer.artists.map((x) => x.name).join(', ') || 'none';
+    return activity(`mood "${m}" → tags: ${t} | artists: ${a}`);
+  });
   engine.on('unplayable', (t) => {
     stage = `no match for ${t.artist}`;
     push('warn', `no playable match for ${name(t)}`);
@@ -87,8 +99,29 @@ export async function radio({
 
   if (mood) engine.mood = mood;
 
+  /**
+   * Volume is a preference, not a runtime flag, so it is written back to
+   * config and restored next launch. The write is debounced because holding
+   * +/- would otherwise hit the disk on every keypress, and only the stored
+   * file is touched — never the in-memory overrides, which is how a one-off
+   * `--no-llm` once became permanent.
+   */
+  let volumeWrite = null;
+  const persistVolume = (value) => {
+    if (volumeWrite) clearTimeout(volumeWrite);
+    volumeWrite = setTimeout(() => {
+      volumeWrite = null;
+      try {
+        saveConfig(merge(loadConfig(), { player: { volume: value } }));
+      } catch {
+        /* a failed preference write must never interrupt playback */
+      }
+    }, 1200);
+  };
+
   const setVolume = (next) => {
-    volume = Math.max(0, Math.min(130, next));
+    volume = Math.max(0, Math.min(config.player.maxVolume, next));
+    persistVolume(volume);
     return player.setVolume(volume);
   };
 
@@ -131,6 +164,7 @@ export async function radio({
       duration: duration ?? engine.nowPlaying?.duration ?? null,
       paused,
       volume,
+      maxVolume: config.player.maxVolume,
       queue: engine.queue,
       stats: history.stats(),
       mood: engine.mood,
@@ -153,6 +187,10 @@ export async function radio({
     if (quitting) return;
     quitting = true;
     clearInterval(timer);
+    if (volumeWrite) {
+      clearTimeout(volumeWrite);
+      try { saveConfig(merge(loadConfig(), { player: { volume } })); } catch { /* best effort */ }
+    }
     setSink(null);
     tui.destroy();
     await engine.stop().catch(() => {});
@@ -167,7 +205,8 @@ export async function radio({
 
   activity(`autodj started — mode ${mode.label}`);
   await draw();
-  await setVolume(volume);
+  // Apply the stored level without rewriting it straight back.
+  await player.setVolume(volume);
 
   // A seed query overrides both the quick start and the first refill.
   if (seedQuery) {

@@ -27,6 +27,8 @@ export class DjEngine extends EventEmitter {
   #enricher;
   #library;
   #boostTimer = null;
+  #moodResolver;
+  #steer = null;
 
   queue = [];
   nowPlaying = null;
@@ -40,7 +42,7 @@ export class DjEngine extends EventEmitter {
 
   constructor({
     config, sources, player, scrobbler, history, affinity, curator, resolver, enricher,
-    library,
+    library, moodResolver,
   }) {
     super();
     this.#config = config;
@@ -53,6 +55,7 @@ export class DjEngine extends EventEmitter {
     this.#resolver = resolver;
     this.#enricher = enricher;
     this.#library = library;
+    this.#moodResolver = moodResolver;
 
     player.on('end-file', (m) => this.#onEndFile(m));
   }
@@ -337,16 +340,37 @@ export class DjEngine extends EventEmitter {
     return true;
   }
 
-  setMood(mood) {
+  /**
+   * Point the DJ at a direction.
+   *
+   * The mood is resolved into concrete seed artists and tags *before* the
+   * refill, so it drives retrieval rather than only the ordering of whatever
+   * your history already produced. Without that step, asking for a genre you
+   * have never scrobbled just reshuffles the usual suspects.
+   */
+  async setMood(mood) {
     this.mood = mood || null;
-    // A new direction invalidates the queued set.
     this.queue = [];
-    this.emit('mood', this.mood);
-    return this.refill();
+    this.#steer = null;
+
+    if (this.mood) {
+      this.emit('mood-resolving', this.mood);
+      this.#steer = await this.#moodResolver?.resolve(this.mood).catch(() => null) ?? null;
+      if (!this.#steer) {
+        warn(`could not turn "${this.mood}" into anything searchable — using your history instead`);
+      }
+      this.emit('mood', this.mood, this.#steer);
+    } else {
+      this.emit('mood', null, null);
+    }
+
+    await this.refill(this.#steer);
+    // Start the new direction now rather than at the end of the current track.
+    return this.advance();
   }
 
   /** Idempotent — concurrent callers share one in-flight refill. */
-  refill(steer = null) {
+  refill(steer = this.#steer) {
     if (this.#refilling) return this.#refilling;
     this.#refilling = this.#doRefill(steer).finally(() => {
       this.#refilling = null;

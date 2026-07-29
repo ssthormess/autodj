@@ -30,6 +30,8 @@ export class Player extends EventEmitter {
       binary,
       [
         ...args,
+        `--volume=${this.#config.player.volume}`,
+        `--volume-max=${this.#config.player.maxVolume}`,
         `--input-ipc-server=${IPC_SOCKET}`,
         '--ytdl=yes',
         '--ytdl-format=bestaudio[ext=m4a]/bestaudio/best',
@@ -64,7 +66,8 @@ export class Player extends EventEmitter {
   stop = () => this.#ipc.command('stop');
   togglePause = () => this.#ipc.command('cycle', 'pause');
   seek = (seconds) => this.#ipc.command('seek', seconds, 'relative');
-  setVolume = (v) => this.#ipc.set('volume', Math.max(0, Math.min(130, v)));
+  setVolume = (v) =>
+    this.#ipc.set('volume', Math.max(0, Math.min(this.#config.player.maxVolume, v)));
 
   async position() {
     try {

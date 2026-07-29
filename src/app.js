@@ -13,6 +13,7 @@ import { createCurator } from './llm/curate.js';
 import { createHistory } from './dj/history.js';
 import { createAffinity } from './dj/affinity.js';
 import { createEnricher } from './dj/enrich.js';
+import { createMoodResolver } from './dj/mood.js';
 import { createAcousticBrainz } from './acousticbrainz/client.js';
 import { createLibrary } from './library/store.js';
 import { credentialsFromPear, whoami } from './lastfm/auth.js';
@@ -75,6 +76,9 @@ export async function buildApp({ requirePlayer = true, overrides = null } = {}) 
   const history = createHistory();
   const affinity = createAffinity();
   const library = createLibrary();
+  const moodResolver = createMoodResolver({
+    tags: sources.tags, similar: sources.similar, config,
+  });
   const curator = createCurator(config);
   const enricher = createEnricher(createAcousticBrainz(), {
     enabled: config.sources.acousticBrainz,
@@ -84,11 +88,11 @@ export async function buildApp({ requirePlayer = true, overrides = null } = {}) 
   if (requirePlayer) await player.start();
 
   const engine = new DjEngine({
-    config, sources, player, scrobbler, history, affinity, curator, resolver, enricher, library,
+    config, sources, player, scrobbler, history, affinity, curator, resolver, enricher, library, moodResolver,
   });
 
   return {
     config, client, sources, resolver, scrobbler, history, affinity, curator,
-    enricher, library, player, engine,
+    enricher, library, moodResolver, player, engine,
   };
 }

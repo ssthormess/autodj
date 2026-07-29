@@ -90,7 +90,9 @@ export function createNowPlaying(parent) {
       badges.setContent(parts.join(' {gray-fg}·{/} '));
     }
 
-    volumeBar.setProgress(Math.min(100, (volume / 130) * 100));
+    // Percentage of the configured ceiling, not of an assumed 130.
+    const ceiling = state.maxVolume || 100;
+    volumeBar.setProgress(Math.min(100, (volume / ceiling) * 100));
     volumeValue.setContent(`{gray-fg}${volume}%{/}`);
   }
 
