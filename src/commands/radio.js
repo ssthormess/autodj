@@ -4,7 +4,7 @@ import { createTui } from '../ui/tui.js';
 import { resolveMode } from '../dj/modes.js';
 import { setVerbose, setSink } from '../util/log.js';
 import { createResourceSampler } from '../util/resources.js';
-import { fetchCoverCells } from '../ui/cover.js';
+import { fetchCoverCells, defaultCoverCells } from '../ui/cover.js';
 import { createLevelReader } from '../player/levels.js';
 
 /**
@@ -71,14 +71,17 @@ export async function radio({
   engine.on('playing', (t) => {
     scrobbled = false;
     stage = null;
-    cover = null;
+    // Fall back immediately to generated art, then replace it if real
+    // artwork arrives — the card never sits empty.
+    cover = defaultCoverCells(`${t.artist}::${t.album ?? ''}`);
     levels.reset();
     activity(`playing    ${name(t)}  (${t.curated ? 'llm' : t.source ?? '?'})`);
     if (t.image) {
       fetchCoverCells(t.image, { columns: 16, rows: 8 })
         .then((cells) => {
-          // Guard against a slow fetch landing after the track moved on.
-          if (engine.nowPlaying === t) cover = cells;
+          // Guard against a slow fetch landing after the track moved on, and
+          // keep the placeholder when the release genuinely has no art.
+          if (cells && engine.nowPlaying === t) cover = cells;
         })
         .catch(() => {});
     }

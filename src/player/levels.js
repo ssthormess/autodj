@@ -21,11 +21,23 @@ const loudnessToUnit = (lufs) => {
   return Math.max(0, Math.min(1, (lufs - floor) / (0 - floor)));
 };
 
-export function createLevelReader(ipcGet, { smoothing = 0.35 } = {}) {
+export function createLevelReader(ipcGet, { smoothing = 0.35, giveUpAfter = 30 } = {}) {
   let left = 0;
   let right = 0;
   let loudness = 0;
   let available = true;
+
+  /**
+   * Consecutive failed reads.
+   *
+   * Giving up on the first error was wrong: the render loop starts sampling
+   * immediately, while the first track is still being resolved and loaded, so
+   * the very first read reliably arrives before mpv has decoded anything and
+   * has no metadata to report. Latching off at that point disabled the meter
+   * for the entire session. Only a sustained run of failures means the filter
+   * genuinely isn't there.
+   */
+  let failures = 0;
 
   // Peaks jump around far faster than the eye can follow; a decay keeps the
   // meter readable while still dropping quickly on a real cut.
@@ -36,18 +48,25 @@ export function createLevelReader(ipcGet, { smoothing = 0.35 } = {}) {
     if (!available) return { left, right, loudness, available };
     try {
       const data = await ipcGet(`af-metadata/${FILTER_LABEL}`);
-      if (!data) return { left, right, loudness, available };
+      if (!data) {
+        failures += 1;
+        if (failures >= giveUpAfter) available = false;
+        return { left, right, loudness, available };
+      }
 
       const peakL = Number(data['lavfi.r128.true_peaks_ch0']);
       const peakR = Number(data['lavfi.r128.true_peaks_ch1']);
       const m = Number(data['lavfi.r128.M']);
 
+      failures = 0;
       left = smooth(left, Math.max(0, Math.min(1, peakL || 0)));
       right = smooth(right, Math.max(0, Math.min(1, peakR || 0)));
       loudness = smooth(loudness, loudnessToUnit(m));
     } catch {
-      // The filter is absent (older mpv, or disabled) — stop asking.
-      available = false;
+      // Early reads fail while mpv is still loading the first track, so this
+      // only counts towards giving up rather than deciding it outright.
+      failures += 1;
+      if (failures >= giveUpAfter) available = false;
     }
     return { left, right, loudness, available };
   }
@@ -56,6 +75,9 @@ export function createLevelReader(ipcGet, { smoothing = 0.35 } = {}) {
     left = 0;
     right = 0;
     loudness = 0;
+    // A track change is exactly when reads start failing again, so the
+    // give-up counter starts over with it.
+    failures = 0;
   };
 
   return { sample, reset, isAvailable: () => available };

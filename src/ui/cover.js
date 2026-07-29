@@ -20,6 +20,74 @@ const run = promisify(execFile);
  * ffmpeg does the fetch, scale and decode in one pass, which avoids pulling in
  * an image library for a 16×16 thumbnail.
  */
+/** Deterministic 32-bit hash, so one artist always gets the same artwork. */
+function hash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+const hslToRgb = (h, s, l) => {
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [f(0), f(8), f(4)].map((v) => Math.round(v * 255));
+};
+
+const toHex = ([r, g, b]) =>
+  `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+
+/**
+ * Placeholder artwork for releases that have none.
+ *
+ * Drawn with the same half-block technique as real covers so the card keeps
+ * its shape, rather than leaving a hole whenever Last.fm has no image. The
+ * design is a level-bar motif over a gradient, with the hue and the bar
+ * heights both derived from the artist name — so it is stable for a given
+ * artist and visibly different between them, which makes it read as "this
+ * release has no art" rather than "the art failed to load".
+ *
+ * Deliberately abstract: it is not a logo and does not imitate anyone's
+ * artwork.
+ */
+export function defaultCoverCells(seed = '', { columns = 16, rows = 8 } = {}) {
+  const height = rows * 2;
+  const h = hash(seed || 'autodj');
+  const hue = h % 360;
+
+  const barHeights = Array.from({ length: columns }, (_, i) => {
+    const n = (h >>> (i % 24)) ^ Math.imul(i + 1, 2654435761);
+    return 0.25 + ((n >>> 8) % 1000) / 1000 * 0.6;
+  });
+
+  const pixel = (x, y) => {
+    // Background: vertical gradient, dark at the bottom.
+    const depth = y / (height - 1);
+    const bg = hslToRgb(hue, 0.45, 0.10 + (1 - depth) * 0.16);
+
+    const barTop = Math.round((1 - barHeights[x]) * height);
+    if (y >= barTop) {
+      // Bars brighten toward their tops.
+      const within = (y - barTop) / Math.max(1, height - barTop);
+      return hslToRgb((hue + 20) % 360, 0.55, 0.62 - within * 0.28);
+    }
+    return bg;
+  };
+
+  const lines = [];
+  for (let row = 0; row < rows; row += 1) {
+    let line = '';
+    for (let x = 0; x < columns; x += 1) {
+      line += `{${toHex(pixel(x, row * 2))}-fg}{${toHex(pixel(x, row * 2 + 1))}-bg}▀{/}`;
+    }
+    lines.push(line);
+  }
+  return lines.join('\n');
+}
+
 export async function fetchCoverCells(url, { columns = 16, rows = 8 } = {}) {
   if (!url) return null;
 
