@@ -6,6 +6,7 @@ import { IPC_SOCKET } from '../config/paths.js';
 import { debug } from '../util/log.js';
 import { toMpvVolume } from './volume.js';
 import { createFader } from './fade.js';
+import { VIS_FILTER } from './levels.js';
 
 /**
  * Audio-only mpv, driven over IPC.
@@ -68,6 +69,8 @@ export class Player extends EventEmitter {
         '--ytdl=yes',
         '--ytdl-format=bestaudio[ext=m4a]/bestaudio/best',
         // Keep playback smooth over flaky connections.
+        // Publishes loudness and true-peak metadata for the level meter.
+        `--af=${VIS_FILTER}`,
         '--cache=yes',
         '--cache-secs=60',
         '--demuxer-max-bytes=64MiB',
@@ -103,6 +106,9 @@ export class Player extends EventEmitter {
     this.#baseVolume = Math.max(0, Math.min(this.#config.player.maxVolume, displayed));
     return this.#pushVolume();
   };
+
+  /** Raw property read, used by the level meter. */
+  getProperty = (name) => this.#ipc.get(name);
 
   async position() {
     try {

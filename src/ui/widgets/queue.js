@@ -11,10 +11,6 @@ import blessed from 'blessed';
 export function createQueue(parent, { onSelect, onContext }) {
   const box = blessed.box({
     parent,
-    top: 11,
-    left: 0,
-    right: 30,
-    height: 9,
     border: { type: 'line' },
     style: { border: { fg: 'gray' } },
     label: ' up next ',

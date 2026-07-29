@@ -5,6 +5,7 @@ import { resolveMode } from '../dj/modes.js';
 import { setVerbose, setSink } from '../util/log.js';
 import { createResourceSampler } from '../util/resources.js';
 import { fetchCoverCells } from '../ui/cover.js';
+import { createLevelReader } from '../player/levels.js';
 
 /**
  * The continuous set.
@@ -37,6 +38,10 @@ export async function radio({
   // meter does not become a noticeable share of what it reports.
   const resources = createResourceSampler({ pidOf: () => player.pid });
 
+  // Reads mpv's own loudness metadata, so the meter shows the real signal.
+  const levels = createLevelReader((prop) => player.getProperty(prop));
+  let levelSample = null;
+
   // Log output is captured, never printed: a stray write from a background
   // lane would corrupt the frame.
   const messages = [];
@@ -66,6 +71,7 @@ export async function radio({
     scrobbled = false;
     stage = null;
     cover = null;
+    levels.reset();
     activity(`playing    ${name(t)}  (${t.curated ? 'llm' : t.source ?? '?'})`);
     if (t.image) {
       fetchCoverCells(t.image, { columns: 16, rows: 8 })
@@ -157,11 +163,27 @@ export async function radio({
       const answer = await tui.prompt('mood / direction (blank clears)');
       await engine.setMood(answer);
     },
+    theme: () => {
+      const name = tui.cycleTheme();
+      persistTheme(name);
+      activity(`theme: ${name}`);
+    },
+    logUp: () => tui.scrollLog(-3),
+    logDown: () => tui.scrollLog(3),
     quit: () => shutdown(),
+  };
+
+  const persistTheme = (name) => {
+    try {
+      saveConfig(merge(loadConfig(), { ui: { theme: name } }));
+    } catch {
+      /* a failed preference write must not interrupt playback */
+    }
   };
 
   const tui = createTui({
     mode: mode.label,
+    theme: config.ui.theme,
     onKey: (name) => Promise.resolve(actions[name]?.()).catch(() => {}),
     onSelectTrack: (index) => engine.playAt(index).catch(() => {}),
     onContextAction: (index, action) => {
@@ -202,6 +224,7 @@ export async function radio({
       messages,
       scrobbled,
       cover,
+      levels: levelSample,
       boost: engine.boostEnabled,
       boostAt: engine.boostAt,
       resources: resources.sample(),
@@ -211,6 +234,7 @@ export async function radio({
   const timer = setInterval(async () => {
     if (quitting) return;
     await engine.tick().catch(() => {});
+    levelSample = await levels.sample().catch(() => levelSample);
     await draw();
   }, 1000);
 

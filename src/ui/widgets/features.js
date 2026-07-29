@@ -28,10 +28,6 @@ const miniBar = (value, width = 10) => {
 export function createFeatures(parent) {
   const box = blessed.box({
     parent,
-    top: 11,
-    right: 0,
-    width: 30,
-    height: 9,
     tags: true,
     border: { type: 'line' },
     style: { border: { fg: 'gray' } },

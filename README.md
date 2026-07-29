@@ -63,6 +63,8 @@ While playing:
 | `r` | force a queue refill |
 | `+` / `-` | volume, 1% steps |
 | `PgUp` / `PgDn` | volume, 10% steps |
+| `[` / `]` | scroll the activity log back / forward |
+| `t` | cycle theme (midnight, amber, winamp, mono) |
 | `q` | quit (flushes pending scrobbles) |
 
 `→` and `n` are deliberately different. Skipping is an opinion — it feeds the
@@ -88,6 +90,27 @@ than counted as a skip.
 
 They are offered separately rather than bundled, because dropping one track
 from one queue and refusing it forever are very different intentions.
+
+### Layout, themes and the level meter
+
+The layout is computed from the terminal size on start and on every resize.
+Above 88 columns the queue and analysis panels sit side by side; below that
+they stack, and the footer's key list wraps onto two or three rows instead of
+running off the edge. A tall narrow window (90x55) and a wide short one both
+work.
+
+The activity log is pinned to the newest line and scrollable with `[` and `]`
+or the mouse wheel. Scrolling back pauses the auto-follow — the label shows
+`[scrolled back]` — so reading history is not yanked away by new entries.
+Previously it wrote a slice into a plain box that could not scroll and clipped
+from the wrong end, which is why the newest lines were the ones that vanished
+as it grew.
+
+Themes cycle with `t` and persist. The level meter is driven by mpv's own
+`ebur128` filter metadata, read over IPC, so it reflects the real signal and
+reads as silence when paused. It is a level meter rather than a spectrum
+analyser: mpv exposes no FFT, and decoding each stream a second time purely to
+compute one would double the bandwidth of every track.
 
 ### Fades
 

@@ -20,8 +20,42 @@ const run = promisify(execFile);
  * ffmpeg does the fetch, scale and decode in one pass, which avoids pulling in
  * an image library for a 16×16 thumbnail.
  */
+/**
+ * Hosts whose artwork we will fetch.
+ *
+ * ffmpeg resolves its input through protocol handlers, so `-i` will happily
+ * accept `file:`, `concat:` or `subfile:` and read from disk. The URL here
+ * arrives from a remote API response, which is not a strong enough guarantee
+ * to hand to something with that reach — so the scheme and host are checked
+ * here, and ffmpeg is additionally told which protocols it may use at all.
+ */
+const ALLOWED_HOSTS = [
+  'lastfm.freetls.fastly.net',
+  'lastfm-img2.akamaized.net',
+  'coverartarchive.org',
+  'archive.org',
+  'i.scdn.co',
+];
+
+function isAllowedArtworkUrl(candidate) {
+  let parsed;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') return false;
+  return ALLOWED_HOSTS.some(
+    (host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`),
+  );
+}
+
 export async function fetchCoverCells(url, { columns = 16, rows = 8 } = {}) {
   if (!url) return null;
+  if (!isAllowedArtworkUrl(url)) {
+    debug(`refusing artwork url outside the allowed hosts: ${String(url).slice(0, 80)}`);
+    return null;
+  }
 
   const cacheKey = `${url}@${columns}x${rows}`;
   const cached = readCache('cover', cacheKey, 60 * 60 * 24 * 30);
@@ -34,6 +68,11 @@ export async function fetchCoverCells(url, { columns = 16, rows = 8 } = {}) {
       'ffmpeg',
       [
         '-loglevel', 'error',
+        // Never wait on a prompt, and refuse every protocol except the one
+        // needed to fetch remote artwork over TLS — belt and braces with the
+        // host check above.
+        '-nostdin',
+        '-protocol_whitelist', 'https,tls,tcp',
         '-i', url,
         '-vf', `scale=${columns}:${height}:flags=lanczos`,
         '-frames:v', '1',
