@@ -16,10 +16,21 @@ const UA =
 export function createWebSource({ user, cookie = null }) {
   let cookieHeader = cookie;
   let unavailable = false;
+  let pending = null;
 
+  /**
+   * Single-flight. The three stations run as concurrent lanes during a refill,
+   * so without this they would each kick off their own cookie read at the same
+   * moment and contend over the browser's database.
+   */
   async function ensureCookie() {
     if (cookieHeader || unavailable) return cookieHeader;
-    cookieHeader = await lastfmCookieHeader();
+    if (!pending) {
+      pending = lastfmCookieHeader().finally(() => {
+        pending = null;
+      });
+    }
+    cookieHeader = await pending;
     if (!cookieHeader) {
       unavailable = true;
       warn('no Last.fm web session found — recommendation stations disabled (run: autodj login --web)');

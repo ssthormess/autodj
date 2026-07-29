@@ -37,8 +37,15 @@ function profileCandidates() {
     .sort((a, b) => mtime(b) - mtime(a));
 }
 
+// Concurrent callers must not share a scratch filename: the copy is deleted in
+// a `finally`, so two overlapping reads would delete each other's snapshot
+// mid-query. Several candidate lanes ask for the cookie at once, which made
+// this fail during a refill while the sequential `login --web` path passed.
+let scratchCounter = 0;
+
 async function readCookiesFrom(dbPath, hostPattern) {
-  const scratch = join(tmpdir(), `autodj-cookies-${process.pid}.sqlite`);
+  scratchCounter += 1;
+  const scratch = join(tmpdir(), `autodj-cookies-${process.pid}-${scratchCounter}.sqlite`);
   try {
     copyFileSync(dbPath, scratch);
     const { stdout } = await run(

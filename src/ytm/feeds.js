@@ -50,17 +50,50 @@ const FEEDS = {
  * artist channel, which is always suffixed "- Topic".
  */
 export function toMusicTrack(v) {
-  const topicChannel = /\s-\sTopic$/.test(v.uploader ?? v.channel ?? '');
-  const artist = v.artist ?? (topicChannel ? (v.uploader ?? v.channel).replace(/\s-\sTopic$/, '') : null);
-  const name = v.track ?? (topicChannel ? stripYoutubeDecoration(v.title ?? '') : null);
+  // `--flat-playlist` is cheap but shallow: it returns only title, uploader,
+  // channel and duration. There is no `artist`, no `track`, and no "- Topic"
+  // suffix to key on — those appear only under full extraction, which would
+  // cost one request per entry. So identity is parsed from the title here and
+  // *verified against Last.fm later*; see `needsVerification` below.
+  const duration = Number(v.duration) || null;
+  // A song is minutes long. Anything else is a mix, a set, a stream or talk.
+  if (duration !== null && (duration < 45 || duration > 900)) return null;
+
+  let artist = null;
+  let name = null;
+
+  if (v.artist && v.track) {
+    // Full extraction gave us real metadata; no parsing needed.
+    artist = v.artist;
+    name = v.track;
+  } else {
+    const title = stripYoutubeDecoration(v.title ?? '').trim();
+    if (!title) return null;
+    const uploader = (v.uploader ?? v.channel ?? '').replace(/\s-\sTopic$/, '').trim();
+
+    // Music titles overwhelmingly read "Artist - Track".
+    const split = title.match(/^(.{1,80}?)\s+[-–—|]\s+(.+)$/);
+    if (split) {
+      [, artist, name] = split;
+    } else if (uploader) {
+      // No separator: assume the channel is the artist and the title the song.
+      artist = uploader;
+      name = title;
+    }
+  }
 
   if (!artist || !name) return null;
 
-  // Anything much longer than a song is a set, a mix or a podcast.
-  const duration = Number(v.duration) || null;
-  if (duration && (duration < 45 || duration > 900)) return null;
-
-  return { artist, name, videoId: v.id, duration };
+  return {
+    artist: artist.trim(),
+    name: name.trim(),
+    videoId: v.id,
+    duration,
+    // Title-parsed identity is a guess. The refill drops any such candidate
+    // that Last.fm cannot resolve to a real track, which is what keeps news
+    // clips and podcasts out of the queue.
+    needsVerification: !(v.artist && v.track),
+  };
 }
 
 export function createFeeds(config) {

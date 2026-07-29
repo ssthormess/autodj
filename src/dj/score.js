@@ -54,6 +54,13 @@ export function scoreCandidate(candidate, context) {
   // the second pass, once the data it depends on is actually present.
   if (context.strict && mode?.require && !mode.require(candidate)) return -Infinity;
 
+  // Candidates whose identity was guessed from a YouTube title only survive if
+  // Last.fm recognises them as an actual track. This is the filter that keeps
+  // news clips, podcasts and vlogs out of the queue: they parse into a
+  // plausible "artist - title" pair, but no music database has ever heard of
+  // them. Applies on the strict pass, once correction has run.
+  if (context.strict && candidate.needsVerification && !candidate.corrected) return -Infinity;
+
   let score = 0;
 
   // Relevance: how close Last.fm thinks this is to the seed.
