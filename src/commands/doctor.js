@@ -12,6 +12,8 @@ const run = promisify(execFile);
 const ok = (m) => console.log(`${green('✔')} ${m}`);
 const bad = (m) => console.log(`${red('✖')} ${m}`);
 const meh = (m) => console.log(`${yellow('!')} ${m}`);
+// Neutral: something switched off by choice, not something wrong.
+const note = (m) => console.log(`${dim('·')} ${dim(m)}`);
 
 async function checkBinary(name, args = ['--version']) {
   try {
@@ -65,14 +67,16 @@ export async function doctor() {
       if (has) ok(`ListenBrainz CF recommendations for ${bold(config.listenbrainz.user)}`);
       else meh(`ListenBrainz user "${config.listenbrainz.user}" has no listens — CF lane will be empty`);
     } else {
-      meh('no listenbrainz.user set — CF recommendations disabled, similarity still active');
+      // Optional extra, not a missing requirement — the similarity lanes above
+      // already run without an account.
+      note('ListenBrainz CF lane off (optional: needs an account, set listenbrainz.user)');
     }
   }
 
   if (config.sources.lastfmWeb || config.sources.ytmFeeds) {
     const sqlite = await hasSqlite();
     if (!sqlite) bad('sqlite3 missing — browser-backed feeds cannot read the cookie store');
-    else meh('browser-backed feeds: run `autodj login --web` to verify Last.fm + YTM sessions');
+    else note('browser-backed feeds: run `autodj login --web` to verify Last.fm + YouTube sessions');
   }
 
   if (config.llm.enabled) {

@@ -36,10 +36,41 @@ const FEEDS = {
   history: ':ythistory',
 };
 
+/**
+ * Accept an entry only when YouTube itself says it is music.
+ *
+ * `:ytrec` is the YouTube-wide recommendation feed, not a YouTube Music one —
+ * it happily returns news, vlogs and podcasts. Treating the uploader as the
+ * artist (the obvious-looking fallback) lets every one of those through: a
+ * political news upload arrives as artist "Some Channel", title "…", and looks
+ * exactly like a track.
+ *
+ * So there is no uploader fallback here. An entry qualifies only if YouTube
+ * tagged it with real music metadata, or it comes from an auto-generated
+ * artist channel, which is always suffixed "- Topic".
+ */
+export function toMusicTrack(v) {
+  const topicChannel = /\s-\sTopic$/.test(v.uploader ?? v.channel ?? '');
+  const artist = v.artist ?? (topicChannel ? (v.uploader ?? v.channel).replace(/\s-\sTopic$/, '') : null);
+  const name = v.track ?? (topicChannel ? stripYoutubeDecoration(v.title ?? '') : null);
+
+  if (!artist || !name) return null;
+
+  // Anything much longer than a song is a set, a mix or a podcast.
+  const duration = Number(v.duration) || null;
+  if (duration && (duration < 45 || duration > 900)) return null;
+
+  return { artist, name, videoId: v.id, duration };
+}
+
 export function createFeeds(config) {
   const { binary, timeoutMs } = config.resolver;
   const { cookiesFromBrowser } = config.sources;
   let unavailable = false;
+  // How many entries each feed returned versus how many survived the music
+  // filter. Surfaced by `autodj login --web`, so an over-aggressive filter is
+  // visible as "40 entries, 0 kept" rather than an inexplicably empty lane.
+  const lastStats = new Map();
 
   async function playlist(target, limit = 40) {
     if (unavailable) return [];
@@ -59,7 +90,7 @@ export function createFeeds(config) {
         maxBuffer: 64 * 1024 * 1024,
       });
 
-      return stdout
+      const entries = stdout
         .split('\n')
         .filter(Boolean)
         .map((line) => {
@@ -69,14 +100,14 @@ export function createFeeds(config) {
             return null;
           }
         })
-        .filter(Boolean)
-        .map((v) => ({
-          artist: v.artist ?? v.uploader?.replace(/ - Topic$/, '') ?? '',
-          name: v.track ?? stripYoutubeDecoration(v.title ?? ''),
-          videoId: v.id,
-          duration: Number(v.duration) || null,
-        }))
-        .filter((t) => t.artist && t.name);
+        .filter(Boolean);
+
+      const kept = entries.map(toMusicTrack).filter(Boolean);
+      lastStats.set(target, { raw: entries.length, kept: kept.length });
+      if (entries.length && !kept.length) {
+        debug(`${target}: ${entries.length} entries, none matched the music filter`);
+      }
+      return kept;
     } catch (err) {
       const message = String(err.message);
       if (/sign in|cookies|private|not available|login/i.test(message)) {
@@ -101,6 +132,7 @@ export function createFeeds(config) {
     playlist(FEEDS.history, limit).then(tag('ytm-history', 'YouTube history'));
 
   const available = () => !unavailable;
+  const statsFor = (target) => lastStats.get(target) ?? null;
 
-  return { liked, recommendations, history, playlist, available, FEEDS };
+  return { liked, recommendations, history, playlist, available, statsFor, FEEDS };
 }

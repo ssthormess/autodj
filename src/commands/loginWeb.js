@@ -57,15 +57,23 @@ export async function loginWeb() {
   }
 
   const feeds = createFeeds(config);
-  for (const [name, fn] of [
-    ['Liked Music', () => feeds.liked(5)],
-    ['Recommendations', () => feeds.recommendations(5)],
-    ['History', () => feeds.history(5)],
+  for (const [name, target, fn] of [
+    ['Liked Music', feeds.FEEDS.liked, () => feeds.liked(20)],
+    ['Recommendations', feeds.FEEDS.recommendations, () => feeds.recommendations(20)],
+    ['History', feeds.FEEDS.history, () => feeds.history(20)],
   ]) {
     // eslint-disable-next-line no-await-in-loop
     const tracks = await fn();
+    const counts = feeds.statsFor(target);
+    // `raw` counts everything YouTube returned; `kept` counts what passed the
+    // music filter. Showing both distinguishes "feed is empty" from "feed is
+    // full of things that aren't songs".
+    const detail = counts ? dim(` [${counts.raw} entries, ${counts.kept} music]`) : '';
+
     if (tracks.length) {
-      ok(`YouTube ${bold(name)} → ${tracks.length} tracks ${dim(`e.g. ${tracks[0].artist} — ${tracks[0].name}`)}`);
+      ok(`YouTube ${bold(name)}${detail} ${dim(`e.g. ${tracks[0].artist} — ${tracks[0].name}`)}`);
+    } else if (counts?.raw) {
+      meh(`YouTube ${bold(name)}${detail} — returned items, but none were music`);
     } else {
       bad(`YouTube ${bold(name)} returned nothing`);
     }
