@@ -53,14 +53,45 @@ While playing:
 | key | action |
 |-----|--------|
 | `space` | pause / resume |
-| `n` | skip (recorded as a negative signal) |
+| `→` | next track — **no consequences**, nothing recorded |
+| `n` | skip — recorded as a negative signal against track and artist |
 | `↑` / `↓` | up/down vote — feeds the taste profile |
 | `l` | love on Last.fm **and** strongest positive vote |
 | `b` | ban — never queue this track again |
 | `m` | set or clear a mood/direction |
 | `r` | force a queue refill |
-| `+` / `-` | volume |
+| `+` / `-` | volume (shown as a gauge, so you can see the level) |
 | `q` | quit (flushes pending scrobbles) |
+
+`→` and `n` are deliberately different. Skipping is an opinion — it feeds the
+scoring and, repeated, bans the track. Moving on because you feel like it
+should not poison the profile, so the arrow does exactly nothing beyond
+advancing.
+
+**Click any track in the up-next list to play it immediately.** The rest of the
+queue stays as it is, and the current track is finished neutrally rather than
+counted as a skip.
+
+## Scrobble booster
+
+```bash
+autodj --boost              # composes with any mode
+autodj --hits --boost
+```
+
+Advances 5–10 seconds after the current track scrobbles, instead of playing it
+out. A scrobble lands at half the track or four minutes, whichever comes first,
+so this plays roughly the minimum each track needs in order to count. The
+delay is randomised across the window rather than fixed, and the now-playing
+line shows a `next in Ns` countdown so the early advance is never a surprise.
+
+An advance made by the booster is **not** a skip: the track already counted, so
+recording it as a rejection would be wrong.
+
+Worth knowing before using it: the playcounts it inflates are the same
+`user.getTopTracks` numbers that `--hits`, `--discover` and the familiarity
+scoring all read from. Boosting will progressively skew this tool's own
+recommendations toward whatever it boosted.
 
 ## The local library
 

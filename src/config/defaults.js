@@ -17,6 +17,20 @@ export const DEFAULTS = {
     minSeconds: 240,
     // Tracks shorter than this are never scrobbled (Last.fm rule).
     minTrackLength: 30,
+
+    /**
+     * Scrobble booster: advance to the next track shortly after the current
+     * one has counted, rather than playing it out.
+     *
+     * A scrobble lands at half the track or four minutes, whichever comes
+     * first, so this plays roughly the minimum each track needs to register
+     * and then moves on. Off by default; `--boost` turns it on.
+     */
+    boost: {
+      enabled: false,
+      minDelay: 5,
+      maxDelay: 10,
+    },
   },
 
   dj: {

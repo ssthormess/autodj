@@ -13,12 +13,15 @@ import { createFooter } from './widgets/footer.js';
  * where it should not have, and the frame smeared across the terminal.
  * blessed handles layout, clipping, resize and the alternate screen buffer.
  */
-export function createTui({ title = 'autodj', mode, onKey }) {
+export function createTui({ title = 'autodj', mode, onKey, onSelectTrack }) {
   const screen = blessed.screen({
     smartCSR: true,
     fullUnicode: true,
     title,
     autoPadding: true,
+    // Needed for the clickable queue. Terminal text selection generally needs
+    // the modifier key (option/shift) while this is active.
+    mouse: true,
     // Never let blessed emit a bell; some terminals flash the whole window.
     warnings: false,
   });
@@ -34,7 +37,7 @@ export function createTui({ title = 'autodj', mode, onKey }) {
   const body = blessed.box({ parent: screen, top: 1, left: 0, right: 0, bottom: 0 });
 
   const nowPlaying = createNowPlaying(body);
-  const queue = createQueue(body);
+  const queue = createQueue(body, { onSelect: onSelectTrack });
   const log = createLog(body);
   const footer = createFooter(body);
 
@@ -42,7 +45,8 @@ export function createTui({ title = 'autodj', mode, onKey }) {
   // wrong, and Ctrl-C is registered like any other binding.
   const bind = (keys, name) => screen.key(keys, () => onKey(name));
   bind(['space'], 'pause');
-  bind(['n', 'right'], 'skip');
+  bind(['n'], 'skip');
+  bind(['right'], 'advance');
   bind(['up'], 'voteUp');
   bind(['down'], 'voteDown');
   bind(['l'], 'love');

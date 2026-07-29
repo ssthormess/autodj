@@ -13,6 +13,7 @@ import { setVerbose, setSink } from '../util/log.js';
  */
 export async function radio({
   mood = null, seedQuery = null, verbose = false, noLlm = false, mode: modeName = null,
+  boost = false,
 } = {}) {
   setVerbose(verbose);
 
@@ -20,6 +21,7 @@ export async function radio({
   const { config, engine, player, history, scrobbler, sources } = await buildApp({
     overrides: {
       ...(noLlm ? { llm: { enabled: false } } : {}),
+      ...(boost ? { scrobble: { boost: { enabled: true } } } : {}),
       dj: { familiarRatio: mode.familiarRatio },
       mode,
     },
@@ -55,7 +57,9 @@ export async function radio({
 
   const actions = {
     pause: () => player.togglePause(),
+    // `n` rejects the track; the right arrow simply moves on.
     skip: () => engine.skip(),
+    advance: () => engine.advance(),
     voteUp: () => engine.vote(+1),
     voteDown: () => engine.vote(-1),
     love: () => engine.love(),
@@ -71,8 +75,9 @@ export async function radio({
   };
 
   const tui = createTui({
-    mode: mode.label,
+    mode: mode.label + (boost ? ' · boost' : ''),
     onKey: (name) => Promise.resolve(actions[name]?.()).catch(() => {}),
+    onSelectTrack: (index) => engine.playAt(index).catch(() => {}),
   });
 
   async function draw() {
@@ -94,6 +99,8 @@ export async function radio({
       stage,
       messages,
       scrobbled,
+      boost,
+      boostAt: engine.boostAt,
     });
   }
 

@@ -71,6 +71,12 @@ export function createNowPlaying(parent) {
       seek.setProgress(duration ? Math.min(100, (position / duration) * 100) : 0);
       clock.setContent(`{gray-fg}${time(position)}/${time(duration)}{/}`);
 
+      // With the booster on, show the countdown to the next advance — the one
+      // number that explains why a track is about to end early.
+      const countdown = state.boostAt
+        ? Math.max(0, Math.ceil((state.boostAt - Date.now()) / 1000))
+        : null;
+
       const parts = [
         paused ? '{yellow-fg}paused{/}' : '{green-fg}playing{/}',
         `{gray-fg}${track.curated ? 'llm' : track.source ?? 'lastfm'}{/}`,
@@ -79,6 +85,7 @@ export function createNowPlaying(parent) {
           : '{green-fg}new to you{/}',
         track.userLoved ? '{red-fg}♥{/}' : null,
         scrobbled ? '{green-fg}scrobbled{/}' : '{gray-fg}not yet scrobbled{/}',
+        countdown !== null ? `{magenta-fg}next in ${countdown}s{/}` : null,
       ].filter(Boolean);
       badges.setContent(parts.join(' {gray-fg}·{/} '));
     }

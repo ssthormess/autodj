@@ -1,8 +1,8 @@
 import blessed from 'blessed';
 
 const KEYS = [
-  ['space', 'pause'], ['n', 'skip'], ['↑/↓', 'vote'], ['l', 'love'], ['b', 'ban'],
-  ['m', 'mood'], ['r', 'refill'], ['+/-', 'vol'], ['q', 'quit'],
+  ['space', 'pause'], ['→', 'next'], ['n', 'skip(-)'], ['↑/↓', 'vote'], ['l', 'love'],
+  ['b', 'ban'], ['m', 'mood'], ['r', 'refill'], ['+/-', 'vol'], ['q', 'quit'],
 ];
 
 export function createFooter(parent) {

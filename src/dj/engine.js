@@ -26,11 +26,13 @@ export class DjEngine extends EventEmitter {
   #resolver;
   #enricher;
   #library;
+  #boostTimer = null;
 
   queue = [];
   nowPlaying = null;
   recentlyPlayed = [];
   mood = null;
+  boostAt = null;
   #startedAt = null;
   #scrobbled = false;
   #refilling = null;
@@ -93,6 +95,8 @@ export class DjEngine extends EventEmitter {
       this.#scrobbled = true;
       this.emit('scrobbled', track);
     }
+    // Whatever ends the track cancels any pending advance for it.
+    this.#clearBoost();
 
     this.#history.recordPlayed(track);
     this.recentlyPlayed.unshift(track);
@@ -108,7 +112,61 @@ export class DjEngine extends EventEmitter {
       await this.#scrobbler.scrobble(this.nowPlaying, this.#startedAt);
       this.#scrobbled = true;
       this.emit('scrobbled', this.nowPlaying);
+      this.#scheduleBoost();
     }
+  }
+
+  /**
+   * Booster: once the track has counted, move on after a short delay instead
+   * of playing it out. The delay is randomised across the configured window
+   * so advances don't land on a fixed cadence.
+   */
+  #scheduleBoost() {
+    const { enabled, minDelay, maxDelay } = this.#config.scrobble.boost ?? {};
+    if (!enabled || this.#boostTimer) return;
+
+    const delay = minDelay + Math.random() * Math.max(0, maxDelay - minDelay);
+    this.boostAt = Date.now() + delay * 1000;
+    this.emit('boost', delay);
+
+    this.#boostTimer = setTimeout(() => {
+      this.#boostTimer = null;
+      this.boostAt = null;
+      // Not a skip: the track already counted, so it must not be recorded as
+      // a negative signal the way a real skip is.
+      this.advance().catch(() => {});
+    }, delay * 1000);
+  }
+
+  #clearBoost() {
+    if (this.#boostTimer) clearTimeout(this.#boostTimer);
+    this.#boostTimer = null;
+    this.boostAt = null;
+  }
+
+  /**
+   * Move on without judgement.
+   *
+   * Distinct from `skip()`: that records a negative signal against the track
+   * and its artist, which is right when you reject something and wrong when
+   * you simply want the next one. The booster uses this too, since a track it
+   * advances past has already counted.
+   */
+  async advance() {
+    if (this.#stopped) return null;
+    await this.#finishCurrent({ skipped: false });
+    return this.next();
+  }
+
+  /**
+   * Jump straight to a queued track, keeping the rest of the queue intact.
+   * The current track is finished neutrally, not skipped.
+   */
+  async playAt(index) {
+    if (index < 0 || index >= this.queue.length) return null;
+    const [track] = this.queue.splice(index, 1);
+    await this.#finishCurrent({ skipped: false });
+    return this.play(track);
   }
 
   /**
@@ -173,6 +231,7 @@ export class DjEngine extends EventEmitter {
       duration: track.duration ?? resolved.duration ?? null,
     };
 
+    this.#clearBoost();
     this.nowPlaying = playable;
     this.#startedAt = Date.now();
     this.#scrobbled = false;
@@ -344,6 +403,7 @@ export class DjEngine extends EventEmitter {
 
   async stop() {
     this.#stopped = true;
+    this.#clearBoost();
     await this.#finishCurrent({ skipped: false }).catch(() => {});
     await this.#scrobbler.flush().catch(() => {});
   }
