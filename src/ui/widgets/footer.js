@@ -3,7 +3,7 @@ import { formatBytes } from '../../util/resources.js';
 
 const KEYS = [
   ['space', 'pause'], ['→', 'next'], ['n', 'skip(-)'], ['↑/↓', 'vote'], ['l', 'love'],
-  ['x', 'ban'], ['b', 'boost'], ['m', 'mood'], ['r', 'refill'], ['+/-', 'vol'], ['q', 'quit'],
+  ['x', 'ban'], ['b', 'boost'], ['m', 'mood'], ['r', 'refill'], ['+/-', 'vol 1%'], ['pgup/dn', '10%'], ['q', 'quit'],
 ];
 
 /** Colour the CPU figure once it stops being negligible. */

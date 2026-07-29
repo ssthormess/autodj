@@ -8,7 +8,7 @@ import blessed from 'blessed';
  * global shortcuts — it handles the mouse only, and the screen keeps the
  * keyboard.
  */
-export function createQueue(parent, { onSelect }) {
+export function createQueue(parent, { onSelect, onContext }) {
   const box = blessed.box({
     parent,
     top: 9,
@@ -39,6 +39,20 @@ export function createQueue(parent, { onSelect }) {
   });
 
   list.on('select', (_item, index) => onSelect(index));
+
+  /**
+   * Right-click opens the reject menu for the row under the cursor.
+   *
+   * blessed reports a raw mouse event with absolute screen coordinates, so the
+   * row has to be derived from the list's own top edge plus its scroll offset;
+   * there is no built-in "which item was right-clicked".
+   */
+  list.on('mouse', (data) => {
+    if (data.action !== 'mousedown' || data.button !== 'right') return;
+    const row = data.y - list.atop + (list.childBase ?? 0);
+    if (row < 0 || row >= list.items.length) return;
+    onContext(row, { x: data.x, y: data.y });
+  });
 
   function update(queue, stage) {
     box.setLabel(` up next (${queue.length}) — click to play${stage ? ` · ${stage}` : ''} `);

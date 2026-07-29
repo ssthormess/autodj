@@ -189,6 +189,37 @@ export class DjEngine extends EventEmitter {
   }
 
   /**
+   * Drop a queued track. No opinion is recorded — it simply is not wanted in
+   * this particular set.
+   */
+  removeAt(index) {
+    if (index < 0 || index >= this.queue.length) return null;
+    const [track] = this.queue.splice(index, 1);
+    this.emit('removed', track);
+    return track;
+  }
+
+  /** Downvote a queued track and drop it, without interrupting playback. */
+  downvoteAt(index) {
+    const track = this.queue[index];
+    if (!track) return null;
+    this.#affinity.vote(track, -1, 1);
+    this.queue.splice(index, 1);
+    this.emit('voted', track, -1);
+    return track;
+  }
+
+  /** Ban a queued track outright and drop it. */
+  banAt(index) {
+    const track = this.queue[index];
+    if (!track) return null;
+    this.ban(track);
+    this.queue.splice(index, 1);
+    this.emit('banned', track);
+    return track;
+  }
+
+  /**
    * Jump straight to a queued track, keeping the rest of the queue intact.
    * The current track is finished neutrally, not skipped.
    */

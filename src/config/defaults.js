@@ -108,6 +108,9 @@ export const DEFAULTS = {
     // mpv refuses anything above 100 unless told otherwise, so the gauge and
     // the clamp both key off this rather than assuming a range.
     maxVolume: 100,
+    // +/- move by this; page up/down by the coarse step.
+    volumeStep: 1,
+    volumeCoarseStep: 10,
   },
 
   resolver: {

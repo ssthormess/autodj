@@ -61,7 +61,8 @@ While playing:
 | `b` | toggle the scrobble booster on/off, live |
 | `m` | set or clear a mood/direction |
 | `r` | force a queue refill |
-| `+` / `-` | volume (shown as a gauge, so you can see the level) |
+| `+` / `-` | volume, 1% steps |
+| `PgUp` / `PgDn` | volume, 10% steps |
 | `q` | quit (flushes pending scrobbles) |
 
 `→` and `n` are deliberately different. Skipping is an opinion — it feeds the
@@ -73,9 +74,29 @@ The **activity** panel logs what the DJ is doing as it happens — tracks
 starting, scrobbles landing, refills, votes, boost advances — alongside any
 warnings. The terminal tab title tracks the current `Artist - Track`.
 
-**Click any track in the up-next list to play it immediately.** The rest of the
-queue stays as it is, and the current track is finished neutrally rather than
-counted as a skip.
+**Left-click** any track in the up-next list to play it immediately. The rest
+of the queue stays as it is, and the current track is finished neutrally rather
+than counted as a skip.
+
+**Right-click** a queued track for the reject menu:
+
+| action | effect |
+|--------|--------|
+| Remove from queue | drops it from this set only — no opinion recorded |
+| Downvote | drops it and marks down the track, artist, album and tags |
+| Ban | never queued again, plus the strongest negative vote |
+
+They are offered separately rather than bundled, because dropping one track
+from one queue and refusing it forever are very different intentions.
+
+### Volume
+
+The displayed percentage is a share of full amplitude, not mpv's own number.
+mpv's `volume` property is cubic — `gain = (volume/100)³` — so passing a
+displayed value straight through made 10% roughly a thousandth of full scale,
+which is inaudible. Measured against a tone: 5% is about −26 dB, 20% is −14 dB,
+100% is unity gain. Steps of 1% work out to roughly 1 dB at the quiet end,
+which is about the smallest change worth having.
 
 ## Scrobble booster
 

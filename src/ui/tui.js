@@ -13,7 +13,7 @@ import { createFooter } from './widgets/footer.js';
  * where it should not have, and the frame smeared across the terminal.
  * blessed handles layout, clipping, resize and the alternate screen buffer.
  */
-export function createTui({ title = 'autodj', mode, onKey, onSelectTrack }) {
+export function createTui({ title = 'autodj', mode, onKey, onSelectTrack, onContextAction }) {
   // blessed parses the terminfo database on construction and writes a
   // "Error on xterm-256color.Setulc" line to stderr for capabilities it cannot
   // handle. It is harmless, but it lands in the middle of the display, so it
@@ -51,7 +51,10 @@ export function createTui({ title = 'autodj', mode, onKey, onSelectTrack }) {
   const body = blessed.box({ parent: screen, top: 1, left: 0, right: 0, bottom: 0 });
 
   const nowPlaying = createNowPlaying(body);
-  const queue = createQueue(body, { onSelect: onSelectTrack });
+  const queue = createQueue(body, {
+    onSelect: onSelectTrack,
+    onContext: (index, at) => showContextMenu(index, at),
+  });
   const log = createLog(body);
   const footer = createFooter(body);
 
@@ -67,8 +70,12 @@ export function createTui({ title = 'autodj', mode, onKey, onSelectTrack }) {
   bind(['b'], 'boost');
   bind(['x'], 'ban');
   bind(['r'], 'refill');
+  // Fine steps on +/-, coarse ones on page up/down: 1% at a time is right for
+  // settling on a level, and useless for crossing the whole range.
   bind(['+', '='], 'volumeUp');
   bind(['-', '_'], 'volumeDown');
+  bind(['pageup'], 'volumeUpCoarse');
+  bind(['pagedown'], 'volumeDownCoarse');
   bind(['m'], 'mood');
   bind(['q', 'C-c', 'escape'], 'quit');
 
@@ -90,6 +97,65 @@ export function createTui({ title = 'autodj', mode, onKey, onSelectTrack }) {
     queue.update(state.queue, state.stage);
     log.update(state.messages);
     footer.update(state);
+    screen.render();
+  }
+
+  /**
+   * Right-click menu for a queued track.
+   *
+   * The three actions differ sharply in consequence — dropping one track from
+   * this queue, teaching the profile you dislike it, and refusing it forever —
+   * so they are offered separately rather than bundled into a single click.
+   */
+  const CONTEXT_ACTIONS = [
+    { label: 'Remove from queue', action: 'remove', hint: 'this set only, no opinion recorded' },
+    { label: 'Downvote', action: 'downvote', hint: 'removes it and marks down the artist too' },
+    { label: 'Ban', action: 'ban', hint: 'never queue this track again' },
+  ];
+
+  let contextMenu = null;
+
+  function showContextMenu(index, at) {
+    if (contextMenu) {
+      contextMenu.destroy();
+      contextMenu = null;
+    }
+
+    contextMenu = blessed.list({
+      parent: screen,
+      // Keep the menu on screen when the click lands near an edge.
+      top: Math.max(0, Math.min(at.y, screen.height - 7)),
+      left: Math.max(0, Math.min(at.x, screen.width - 40)),
+      width: 38,
+      height: 5,
+      tags: true,
+      mouse: true,
+      keys: true,
+      vi: false,
+      border: { type: 'line' },
+      style: {
+        border: { fg: 'red' },
+        selected: { bg: 'red', fg: 'white' },
+        item: { hover: { bg: 'gray' } },
+      },
+      items: CONTEXT_ACTIONS.map((a) => ` ${a.label}  {gray-fg}${a.hint}{/}`),
+    });
+
+    const close = () => {
+      contextMenu?.destroy();
+      contextMenu = null;
+      screen.render();
+    };
+
+    contextMenu.on('select', (_item, choice) => {
+      const picked = CONTEXT_ACTIONS[choice];
+      close();
+      if (picked) onContextAction(index, picked.action);
+    });
+    contextMenu.key(['escape', 'q'], close);
+    contextMenu.on('cancel', close);
+
+    contextMenu.focus();
     screen.render();
   }
 

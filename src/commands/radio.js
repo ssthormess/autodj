@@ -136,8 +136,10 @@ export async function radio({
     ban: () => { engine.ban(); return engine.skip(); },
     boost: () => engine.toggleBoost(),
     refill: () => engine.refill(),
-    volumeUp: () => setVolume(volume + 5),
-    volumeDown: () => setVolume(volume - 5),
+    volumeUp: () => setVolume(volume + config.player.volumeStep),
+    volumeDown: () => setVolume(volume - config.player.volumeStep),
+    volumeUpCoarse: () => setVolume(volume + config.player.volumeCoarseStep),
+    volumeDownCoarse: () => setVolume(volume - config.player.volumeCoarseStep),
     mood: async () => {
       const answer = await tui.prompt('mood / direction (blank clears)');
       await engine.setMood(answer);
@@ -149,6 +151,21 @@ export async function radio({
     mode: mode.label,
     onKey: (name) => Promise.resolve(actions[name]?.()).catch(() => {}),
     onSelectTrack: (index) => engine.playAt(index).catch(() => {}),
+    onContextAction: (index, action) => {
+      const track = engine.queue[index];
+      if (!track) return;
+      const label = `${track.artist} — ${track.name}`;
+      if (action === 'remove') {
+        engine.removeAt(index);
+        activity(`removed    ${label} (no opinion recorded)`);
+      } else if (action === 'downvote') {
+        engine.downvoteAt(index);
+        activity(`downvoted  ${label}`);
+      } else if (action === 'ban') {
+        engine.banAt(index);
+        activity(`banned     ${label} — will never be queued again`);
+      }
+    },
   });
 
   async function draw() {
