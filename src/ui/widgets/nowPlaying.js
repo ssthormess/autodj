@@ -13,6 +13,10 @@ import { plural } from '../../util/format.js';
 export function createNowPlaying(parent) {
   const box = blessed.box({
     parent,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 11,
     tags: true,
     border: { type: 'line' },
     style: { border: { fg: 'cyan' } },

@@ -4,10 +4,6 @@ import { createQueue } from './widgets/queue.js';
 import { createLog } from './widgets/log.js';
 import { createFooter } from './widgets/footer.js';
 import { createFeatures } from './widgets/features.js';
-import { createVisualizer } from './widgets/visualizer.js';
-import { computeLayout, applyRect } from './layout.js';
-import { footerRows } from './widgets/footer.js';
-import { resolveTheme, nextTheme } from './theme.js';
 
 /**
  * The player screen.
@@ -18,12 +14,7 @@ import { resolveTheme, nextTheme } from './theme.js';
  * where it should not have, and the frame smeared across the terminal.
  * blessed handles layout, clipping, resize and the alternate screen buffer.
  */
-export function createTui({
-  title = 'autodj', mode, theme: themeName = 'midnight',
-  onKey, onSelectTrack, onContextAction,
-}) {
-  let themeKey = themeName;
-  let theme = resolveTheme(themeKey);
+export function createTui({ title = 'autodj', mode, onKey, onSelectTrack, onContextAction }) {
   // blessed parses the terminfo database on construction and writes a
   // "Error on xterm-256color.Setulc" line to stderr for capabilities it cannot
   // handle. It is harmless, but it lands in the middle of the display, so it
@@ -66,7 +57,6 @@ export function createTui({
     onContext: (index, at) => showContextMenu(index, at),
   });
   const features = createFeatures(body);
-  const visualizer = createVisualizer(body, { columns: 24 });
   const log = createLog(body);
   const footer = createFooter(body);
 
@@ -89,50 +79,7 @@ export function createTui({
   bind(['pageup'], 'volumeUpCoarse');
   bind(['pagedown'], 'volumeDownCoarse');
   bind(['m'], 'mood');
-  bind(['t'], 'theme');
-  bind(['['], 'logUp');
-  bind([']'], 'logDown');
   bind(['q', 'C-c', 'escape'], 'quit');
-
-  /**
-   * Place every panel for the current terminal size. Called on start and on
-   * every resize, so a window that changes shape re-flows instead of leaving
-   * panels overlapping or running off the edge.
-   */
-  function relayout() {
-    const rows = footerRows(screen.width);
-    const l = computeLayout(screen.width, screen.height, { keyRows: rows });
-
-    applyRect(nowPlaying.box, l.nowPlaying);
-    applyRect(queue.box, l.queue);
-    applyRect(features.box, l.features);
-    applyRect(log.box, l.log);
-    applyRect(footer.box, l.footer);
-
-    // The meter lives on the now-playing card, under the badges.
-    visualizer.box.top = l.nowPlaying.top + 8;
-    visualizer.box.left = 1;
-    visualizer.box.width = Math.max(8, Math.min(24, screen.width - l.coverWidth - 6));
-    visualizer.box.height = 1;
-
-    for (const el of [nowPlaying.box, queue.box, features.box, log.box, footer.box]) {
-      el.style.border.fg = theme.border;
-    }
-  }
-
-  screen.on('resize', () => {
-    relayout();
-    screen.render();
-  });
-
-  /** Cycle to the next theme; returns its name for the caller to report. */
-  function cycleTheme() {
-    themeKey = nextTheme(themeKey);
-    theme = resolveTheme(themeKey);
-    relayout();
-    screen.render();
-    return themeKey;
-  }
 
   /**
    * Set the terminal window/tab title. blessed emits the OSC sequence for us;
@@ -151,9 +98,8 @@ export function createTui({
     nowPlaying.update(state);
     queue.update(state.queue, state.stage);
     features.update(state.track);
-    visualizer.update(state.levels, theme);
     log.update(state.messages);
-    footer.update(state, theme);
+    footer.update(state);
     screen.render();
   }
 
@@ -242,12 +188,5 @@ export function createTui({
     screen.destroy();
   }
 
-  relayout();
-
-  return {
-    screen, render, prompt, setTitle, destroy, cycleTheme, relayout,
-    scrollLog: (lines) => log.scrollBy(lines),
-    logToBottom: () => log.toBottom(),
-    themeName: () => themeKey,
-  };
+  return { screen, render, prompt, setTitle, destroy };
 }

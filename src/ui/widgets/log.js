@@ -3,64 +3,38 @@ import blessed from 'blessed';
 const COLOUR = { error: 'red', warn: 'yellow', info: 'cyan', debug: 'gray' };
 
 /**
- * Activity log: pinned to the newest line, scrollable back through history.
+ * Captured log output, rendered inside the UI.
  *
- * The previous version wrote a slice of the messages into a plain box, which
- * could not scroll and clipped from whichever end blessed felt like — so as
- * the log grew, the newest lines were the ones that disappeared. A scrollable
- * widget that is explicitly scrolled to the bottom on each append fixes both:
- * the latest line is always visible, and the history is still reachable.
+ * Background lanes emit warnings at arbitrary moments. Letting those reach
+ * stdout directly is what made the display appear to repeat itself: the write
+ * interleaved with the repaint and scrolled the frame away.
  */
-export function createLog(parent, { onScrollAway } = {}) {
+export function createLog(parent) {
   const box = blessed.box({
     parent,
+    top: 20,
+    left: 0,
+    right: 0,
+    bottom: 3,
     tags: true,
     border: { type: 'line' },
     style: { border: { fg: 'gray' } },
     label: ' activity ',
     scrollable: true,
     alwaysScroll: true,
-    mouse: true,
-    keys: false,
-    scrollbar: { ch: '│', style: { fg: 'gray' } },
-    padding: { left: 1, right: 1 },
   });
 
-  // True while the user has scrolled back; auto-follow pauses until they
-  // return to the bottom, so reading history is not yanked away by new lines.
-  let following = true;
-  let lastCount = 0;
-
-  box.on('scroll', () => {
-    const atBottom = box.getScrollPerc() >= 99;
-    if (atBottom !== following) {
-      following = atBottom;
-      onScrollAway?.(!following);
-    }
-  });
+  const content = blessed.box({ parent: box, top: 0, left: 1, right: 1, tags: true, content: '' });
 
   function update(messages) {
-    if (messages.length !== lastCount) {
-      lastCount = messages.length;
-      box.setContent(
-        messages
-          .map(({ level, text }) => `{${COLOUR[level] ?? 'gray'}-fg}${blessed.escape(text)}{/}`)
-          .join('\n'),
-      );
-      if (following) box.setScrollPerc(100);
-    }
-    box.setLabel(following ? ' activity ' : ' activity {yellow-fg}[scrolled back]{/} ');
+    const height = Math.max(1, box.height - 2);
+    content.setContent(
+      messages
+        .slice(-height)
+        .map(({ level, text }) => `{${COLOUR[level] ?? 'gray'}-fg}${blessed.escape(text)}{/}`)
+        .join('\n'),
+    );
   }
 
-  const scrollBy = (lines) => {
-    box.scroll(lines);
-    following = box.getScrollPerc() >= 99;
-  };
-
-  const toBottom = () => {
-    box.setScrollPerc(100);
-    following = true;
-  };
-
-  return { box, update, scrollBy, toBottom };
+  return { box, update };
 }

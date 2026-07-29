@@ -3,22 +3,10 @@ import { formatBytes } from '../../util/resources.js';
 
 const KEYS = [
   ['space', 'pause'], ['→', 'next'], ['n', 'skip(-)'], ['↑/↓', 'vote'], ['l', 'love'],
-  ['x', 'ban'], ['b', 'boost'], ['m', 'mood'], ['r', 'refill'],
-  ['+/-', 'vol'], ['pgup/dn', 'vol±10'], ['[/]', 'log'], ['t', 'theme'], ['q', 'quit'],
+  ['x', 'ban'], ['b', 'boost'], ['m', 'mood'], ['r', 'refill'], ['+/-', 'vol 1%'], ['pgup/dn', '10%'], ['q', 'quit'],
 ];
 
-/**
- * Number of rows the key list needs at a given width.
- *
- * The layout has to know this before it can place anything, because the footer
- * grows upward: on a narrow terminal the keys wrap onto two or three rows
- * instead of running off the right edge.
- */
-export function footerRows(width) {
-  const plain = KEYS.map(([k, v]) => `${k} ${v}`).join('   ');
-  return Math.max(1, Math.ceil((plain.length + 4) / Math.max(20, width - 2)));
-}
-
+/** Colour the CPU figure once it stops being negligible. */
 const cpuColour = (percent) => {
   if (percent >= 80) return 'red';
   if (percent >= 35) return 'yellow';
@@ -28,47 +16,43 @@ const cpuColour = (percent) => {
 export function createFooter(parent) {
   const box = blessed.box({
     parent,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
     tags: true,
     border: { type: 'line' },
     style: { border: { fg: 'gray' } },
   });
 
-  const help = blessed.box({ parent: box, top: 0, left: 1, right: 1, tags: true, content: '' });
-  const meter = blessed.text({ parent: box, bottom: 0, right: 1, width: 30, tags: true, content: '' });
+  // Leave room on the right for the meter rather than letting the two overlap.
+  const help = blessed.text({
+    parent: box,
+    top: 0,
+    left: 1,
+    right: 34,
+    tags: true,
+    content: KEYS.map(([k, v]) => `{cyan-fg}${k}{/} {gray-fg}${v}{/}`).join('  '),
+  });
 
-  /** Pack the key hints into as many rows as the width requires. */
-  function layoutKeys(width, theme) {
-    const available = Math.max(20, width - 2);
-    const rows = [];
-    let line = '';
-    let plain = '';
+  const meter = blessed.text({ parent: box, top: 0, right: 1, width: 32, tags: true, content: '' });
 
-    for (const [key, label] of KEYS) {
-      const piece = `${key} ${label}`;
-      if (plain.length && plain.length + piece.length + 3 > available) {
-        rows.push(line);
-        line = '';
-        plain = '';
-      }
-      line += `${line ? '   ' : ''}{${theme.accent}-fg}${key}{/} {gray-fg}${label}{/}`;
-      plain += `${plain ? '   ' : ''}${piece}`;
-    }
-    if (line) rows.push(line);
-    return rows;
-  }
-
-  function update(state, theme) {
-    box.style.border.fg = theme.border;
-    help.setContent(layoutKeys(box.width ?? 80, theme).join('\n'));
-
+  function update(state) {
     const r = state.resources;
     const counts = `{gray-fg}${state.stats.played}▸ ${state.stats.banned}⊘{/}`;
+
+    if (!r) {
+      meter.setContent(counts);
+      return;
+    }
+
+    // node plus mpv. mpv does the decoding, so it usually dominates both.
     meter.setContent(
-      r
-        ? `${counts}  {${cpuColour(r.cpu)}-fg}cpu ${r.cpu.toFixed(0)}%{/} {gray-fg}${formatBytes(r.rss)}{/}`
-        : counts,
+      `${counts}  ` +
+        `{${cpuColour(r.cpu)}-fg}cpu ${r.cpu.toFixed(0)}%{/} ` +
+        `{gray-fg}ram ${formatBytes(r.rss)}{/}`,
     );
   }
 
-  return { box, update };
+  return { box, help, update };
 }
