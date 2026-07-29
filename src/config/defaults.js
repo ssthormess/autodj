@@ -146,6 +146,25 @@ export const DEFAULTS = {
     },
   },
 
+  /**
+   * La hora en punto, dicha encima de la música como en una emisora.
+   * Se apaga y se enciende con `a` mientras suena.
+   */
+  announce: {
+    enabled: true,
+    // Cualquier voz de `say -v ?`. Si no está instalada, el aviso se calla
+    // solo en vez de romper nada.
+    voice: 'Mónica',
+    // null = la velocidad propia de la voz.
+    rate: null,
+    // Lo que va detrás de la hora: 'radio reloj' y suena a emisora cubana.
+    // Vacío = solo la hora.
+    station: '',
+    // La música baja a esta fracción de tu nivel mientras habla, y vuelve
+    // luego. A la mitad se oye el aviso sin que la canción desaparezca.
+    duckLevel: 0.5,
+  },
+
   ui: {
     // Persisted; cycle with `t` while playing.
     theme: 'midnight',

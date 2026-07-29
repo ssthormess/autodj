@@ -7,6 +7,8 @@ import { createResourceSampler } from '../util/resources.js';
 import { fetchCoverCells, defaultCoverCells } from '../ui/cover.js';
 import { createLevelReader } from '../player/levels.js';
 import { createLyricsSource } from '../lyrics/lrclib.js';
+import { createVoice } from '../announce/say.js';
+import { createHourlyClock } from '../announce/clock.js';
 
 /**
  * The continuous set.
@@ -65,6 +67,33 @@ export async function radio({
   const activity = (text) => push('info', text);
 
   const name = (t) => `${t.artist} — ${t.name}`;
+
+  /**
+   * La hora en punto, encima de la música.
+   *
+   * `say` sale por la misma salida de audio que mpv, así que la música baja
+   * mientras habla y vuelve después — como en una emisora, no cortando. Se
+   * restaura al nivel que hubiera antes, no a tope: si el booster estaba
+   * haciendo su propio fundido, subir a 1 lo desharía.
+   */
+  const voice = createVoice(config.announce);
+  await voice.check();
+
+  const clock = createHourlyClock({
+    enabled: config.announce.enabled && voice.isAvailable(),
+    station: config.announce.station || null,
+    announce: async (text) => {
+      activity(`hora       ${text}`);
+      const before = player.fadeGain;
+      await player.fadeTo(config.announce.duckLevel, 0.6).catch(() => {});
+      await voice.speak(text);
+      await player.fadeTo(before, 0.8).catch(() => {});
+    },
+  });
+
+  if (config.announce.enabled && !voice.isAvailable()) {
+    push('warn', `voz "${config.announce.voice}" no instalada — sin avisos de hora`);
+  }
 
   engine.on('scrobbled', (t) => {
     scrobbled = true;
@@ -211,6 +240,14 @@ export async function radio({
       if (t) stage = `selected: ${t.artist} — ${t.name}`;
     },
     previous: () => engine.previous(),
+    announce: () => {
+      const on = clock.toggle();
+      activity(
+        on
+          ? `avisos de hora ON — próximo: "${clock.preview()}" en ${Math.round(clock.nextIn() / 60000)} min`
+          : 'avisos de hora OFF',
+      );
+    },
     queuePlay: () => engine.playAt(tui.selectedQueueIndex()),
     queueMenu: () => {
       if (engine.queue.length) tui.openContextMenu(tui.selectedQueueIndex());
@@ -321,6 +358,7 @@ export async function radio({
     quitting = true;
     clearInterval(timer);
     clearInterval(marqueeTimer);
+    clock.stop();
     if (volumeWrite) {
       clearTimeout(volumeWrite);
       try { saveConfig(merge(loadConfig(), { player: { volume } })); } catch { /* best effort */ }

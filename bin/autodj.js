@@ -56,7 +56,7 @@ ${modeNames.map((m) => `    --${m.padEnd(12)} ${dim(MODES[m].description)}`).joi
 
   ${bold('keys while playing')}
     space pause   ←/→ prev/next   n skip(-)   ↑/↓ vote   u undo vote   l love   x ban
-    b boost (toggle)   m mood   r refill   +/- volume   q quit
+    b boost (toggle)   a hora en punto   m mood   r refill   +/- volume   q quit
 `);
 }
 

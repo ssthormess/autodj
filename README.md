@@ -63,6 +63,7 @@ While playing:
 | `l` | love on Last.fm **and** strongest positive vote |
 | `x` | ban — never queue this track again |
 | `b` | toggle the scrobble booster on/off, live |
+| `a` | toggle the hourly time announcement |
 | `m` | set or clear a mood/direction |
 | `r` | force a queue refill |
 | `+` / `-` | volume, 1% steps |
@@ -88,6 +89,34 @@ and forth instead of being cut off, so the window never needs resizing to read
 it. It pauses at each end long enough to actually read, and ping-pongs rather
 than wrapping, because a wrap splits the title across the join exactly when you
 are trying to read it.
+
+### La hora, como en la radio
+
+On the hour, a voice says the time over the music — *"Ocho de la mañana"* — and
+the music ducks to half rather than stopping. macOS `say` does the speaking, so
+there is no service to sign up for and nothing to download.
+
+```jsonc
+// ~/.config/autodj/config.json
+"announce": {
+  "enabled": true,
+  "voice": "Mónica",   // any name from `say -v ?`
+  "rate": null,        // null = the voice's own pace
+  "station": "",       // "radio reloj" for the Cuban-station cadence
+  "duckLevel": 0.5     // fraction of your level while it speaks
+}
+```
+
+Spanish splits the day into four, not two, so the phrasing follows the real
+hour rather than a translated AM/PM: `madrugada` (1–5), `mañana` (6–11),
+`mediodía` (12), `tarde` (13–19), `noche` (20–24). One o'clock is feminine —
+*"Una de la tarde"*, not *"Uno"*. Set `station` to `"radio reloj"` for the
+Cuban-station cadence, or pick any other installed voice. `a` turns it off and
+on mid-set.
+
+Each announcement is scheduled from the wall clock rather than by chaining
+hourly intervals, which drift — and which land on the wrong minute entirely
+after the laptop sleeps.
 
 ### As a Mac app
 

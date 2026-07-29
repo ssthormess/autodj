@@ -84,6 +84,7 @@ export function createTui({
   bind(['down'], 'voteDown');
   bind(['l'], 'love');
   bind(['u'], 'undoVote');
+  bind(['a'], 'announce');
   bind(['b'], 'boost');
   bind(['x'], 'ban');
   bind(['r'], 'refill');
