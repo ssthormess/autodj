@@ -1,0 +1,12 @@
+node_modules/
+*.log
+.DS_Store
+
+# Nothing runtime-generated belongs in the repo. Config in particular holds a
+# Last.fm session key; it lives in ~/.config/autodj, but guard against a stray
+# copy landing here.
+config.json
+library.json
+history.json
+affinity.json
+cache/
