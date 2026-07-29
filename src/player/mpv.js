@@ -6,6 +6,7 @@ import { IPC_SOCKET } from '../config/paths.js';
 import { debug } from '../util/log.js';
 import { toMpvVolume } from './volume.js';
 import { createFader } from './fade.js';
+import { VIS_FILTER } from './levels.js';
 
 /**
  * Audio-only mpv, driven over IPC.
@@ -64,13 +65,10 @@ export class Player extends EventEmitter {
         // The configured number is a share of full amplitude; mpv's own scale
         // is cubic, so it has to be converted rather than passed through.
         `--volume=${toMpvVolume(this.#config.player.volume).toFixed(2)}`,
-        ...(this.#config.player.normalize?.enabled
-          ? [
-            `--af=lavfi=[loudnorm=I=${this.#config.player.normalize.target}`
-              + `:TP=${this.#config.player.normalize.truePeak}`
-              + `:LRA=${this.#config.player.normalize.range}]`,
-          ]
-          : []),
+        // mpv keeps only the last --af it is given, so every filter has to
+        // travel in one chain. Normalisation runs first; the meter measures
+        // what actually reaches the speakers.
+        ...(this.#audioFilters().length ? [`--af=${this.#audioFilters().join(',')}`] : []),
         `--input-ipc-server=${IPC_SOCKET}`,
         '--ytdl=yes',
         '--ytdl-format=bestaudio[ext=m4a]/bestaudio/best',
@@ -100,6 +98,27 @@ export class Player extends EventEmitter {
   get pid() {
     return this.#process?.pid ?? null;
   }
+
+  /**
+   * The audio filter chain, in order.
+   *
+   * mpv keeps only the last `--af` it is given, so every filter has to travel
+   * in a single chain — passing two separate flags silently discards the
+   * first. Normalisation runs first so the meter measures what actually
+   * reaches the speakers.
+   */
+  #audioFilters() {
+    const filters = [];
+    const norm = this.#config.player.normalize;
+    if (norm?.enabled) {
+      filters.push(`lavfi=[loudnorm=I=${norm.target}:TP=${norm.truePeak}:LRA=${norm.range}]`);
+    }
+    if (this.#config.ui?.visualizer !== false) filters.push(VIS_FILTER);
+    return filters;
+  }
+
+  /** Raw property read, used by the level meter. */
+  getProperty = (name) => this.#ipc.get(name);
 
   play = (url) => this.#ipc.command('loadfile', url, 'replace');
   stop = () => this.#ipc.command('stop');

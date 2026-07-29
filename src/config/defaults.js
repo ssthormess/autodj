@@ -145,6 +145,12 @@ export const DEFAULTS = {
     },
   },
 
+  ui: {
+    // Persisted; cycle with `t` while playing.
+    theme: 'midnight',
+    visualizer: true,
+  },
+
   resolver: {
     binary: 'yt-dlp',
     // Search YouTube Music rather than plain YouTube for cleaner matches.
