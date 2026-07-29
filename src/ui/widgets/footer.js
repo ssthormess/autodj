@@ -4,7 +4,7 @@ import { formatBytes } from '../../util/resources.js';
 const KEYS = [
   ['space', 'pause'], ['→', 'next'], ['n', 'skip(-)'], ['↑/↓', 'vote'], ['l', 'love'],
   ['x', 'ban'], ['b', 'boost'], ['m', 'mood'], ['r', 'refill'],
-  ['+/-', 'vol'], ['pgup/dn', 'vol±10'], ['[/]', 'log'], ['t', 'theme'], ['q', 'quit'],
+  ['+/-', 'vol'], ['pgup/dn', 'vol±10'], ['[/]', 'log'], ['tab', 'pick'], ['⏎', 'play'], ['d', 'drop…'], ['t', 'theme'], ['q', 'quit'],
 ];
 
 /**

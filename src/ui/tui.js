@@ -89,6 +89,11 @@ export function createTui({
   bind(['pageup'], 'volumeUpCoarse');
   bind(['pagedown'], 'volumeDownCoarse');
   bind(['m'], 'mood');
+  // Queue navigation, and the reject menu without needing the mouse.
+  bind(['tab'], 'queueDown');
+  bind(['S-tab'], 'queueUp');
+  bind(['enter'], 'queuePlay');
+  bind(['d'], 'queueMenu');
   bind(['t'], 'theme');
   bind(['['], 'logUp');
   bind([']'], 'logDown');
@@ -255,6 +260,13 @@ export function createTui({
 
   return {
     screen, render, prompt, setTitle, destroy, cycleTheme, relayout,
+    moveQueueSelection: (delta, length) => {
+      const index = queue.moveSelection(delta, length);
+      screen.render();
+      return index;
+    },
+    selectedQueueIndex: () => queue.selectedIndex(),
+    openContextMenu: (index) => showContextMenu(index, { x: 4, y: 8 }),
     scrollLog: (lines) => log.scrollBy(lines),
     logToBottom: () => log.toBottom(),
     themeName: () => themeKey,

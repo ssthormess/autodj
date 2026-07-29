@@ -63,6 +63,9 @@ While playing:
 | `r` | force a queue refill |
 | `+` / `-` | volume, 1% steps |
 | `PgUp` / `PgDn` | volume, 10% steps |
+| `Tab` / `Shift-Tab` | move the queue selection |
+| `Enter` | play the selected queued track |
+| `d` | reject menu for the selected track (remove / downvote / ban) |
 | `[` / `]` | scroll the activity log back / forward |
 | `t` | cycle theme (midnight, amber, winamp, mono) |
 | `q` | quit (flushes pending scrobbles) |
@@ -80,7 +83,12 @@ warnings. The terminal tab title tracks the current `Artist - Track`.
 of the queue stays as it is, and the current track is finished neutrally rather
 than counted as a skip.
 
-**Right-click** a queued track for the reject menu:
+**Right-click** a queued track for the reject menu — or select it with `Tab`
+and press `d`, which works everywhere. iTerm2 answers a right-click with its
+own context menu and never forwards the event to the application, so on that
+terminal the keyboard route is the only one available.
+
+The menu offers:
 
 | action | effect |
 |--------|--------|

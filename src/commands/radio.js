@@ -73,11 +73,11 @@ export async function radio({
     stage = null;
     // Fall back immediately to generated art, then replace it if real
     // artwork arrives — the card never sits empty.
-    cover = defaultCoverCells(`${t.artist}::${t.album ?? ''}`);
+    cover = defaultCoverCells(`${t.artist}::${t.album ?? ''}`, { columns: 18, rows: 9 });
     levels.reset();
     activity(`playing    ${name(t)}  (${t.curated ? 'llm' : t.source ?? '?'})`);
     if (t.image) {
-      fetchCoverCells(t.image, { columns: 16, rows: 8 })
+      fetchCoverCells(t.image, { columns: 18, rows: 9 })
         .then((cells) => {
           // Guard against a slow fetch landing after the track moved on, and
           // keep the placeholder when the release genuinely has no art.
@@ -173,6 +173,20 @@ export async function radio({
         saveConfig(merge(loadConfig(), { ui: { theme: name } }));
       } catch { /* a failed preference write must not interrupt playback */ }
       activity(`theme: ${name}`);
+    },
+    queueDown: () => {
+      const i = tui.moveQueueSelection(1, engine.queue.length);
+      const t = engine.queue[i];
+      if (t) stage = `selected: ${t.artist} — ${t.name}`;
+    },
+    queueUp: () => {
+      const i = tui.moveQueueSelection(-1, engine.queue.length);
+      const t = engine.queue[i];
+      if (t) stage = `selected: ${t.artist} — ${t.name}`;
+    },
+    queuePlay: () => engine.playAt(tui.selectedQueueIndex()),
+    queueMenu: () => {
+      if (engine.queue.length) tui.openContextMenu(tui.selectedQueueIndex());
     },
     logUp: () => tui.scrollLog(-3),
     logDown: () => tui.scrollLog(3),

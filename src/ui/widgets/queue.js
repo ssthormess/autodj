@@ -71,5 +71,22 @@ export function createQueue(parent, { onSelect, onContext }) {
     list.setItems(rows.length ? rows : ['{gray-fg}building…{/}']);
   }
 
-  return { box, list, update };
+  /**
+   * Keyboard access to the same actions the mouse offers.
+   *
+   * iTerm2 answers a right-click with its own context menu and never forwards
+   * the event, so a mouse-only path is unreachable there however correct the
+   * handler is. Moving a highlight with the keyboard and acting on it works
+   * in every terminal.
+   */
+  const moveSelection = (delta, length) => {
+    if (!length) return 0;
+    const next = Math.max(0, Math.min(length - 1, (list.selected ?? 0) + delta));
+    list.select(next);
+    return next;
+  };
+
+  const selectedIndex = () => list.selected ?? 0;
+
+  return { box, list, update, moveSelection, selectedIndex };
 }

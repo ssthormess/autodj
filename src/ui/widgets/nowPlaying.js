@@ -24,13 +24,17 @@ export function createNowPlaying(parent) {
   });
 
   // Artwork sits at the right edge; everything else is laid out to its left.
-  const COVER_COLS = 16;
+  // A bordered box of height 11 has nine interior rows. The art was eight,
+  // which left a blank line under it. Nine rows of half-blocks is eighteen
+  // pixels tall, so the width matches it to stay square.
+  const COVER_COLS = 18;
+  const COVER_ROWS = 9;
   const cover = blessed.box({
     parent: box,
     top: 0,
     right: 0,
     width: COVER_COLS,
-    height: 8,
+    height: COVER_ROWS,
     tags: true,
     content: '',
   });
