@@ -13,6 +13,8 @@
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {},
+  "dependencies": {
+    "blessed": "^0.1.81"
+  },
   "license": "MIT"
 }

@@ -43,17 +43,20 @@ export async function syncLibrary(client, user, { onProgress = () => {} } = {}) 
     fetchAll('user.getTopArtists', 'topartists', 'artist'),
   ]);
 
+  // Entries keep the display names alongside the count. The key alone folds
+  // artist and title together and cannot be split back into something
+  // playable, so storing only a number makes the library lookup-only.
   const tracks = {};
   for (const t of tracksResult.items) {
     const artist = t.artist?.name ?? t.artist?.['#text'] ?? t.artist;
     if (!artist || !t.name) continue;
-    tracks[looseKey({ artist, name: t.name })] = Number(t.playcount) || 0;
+    tracks[looseKey({ artist, name: t.name })] = [artist, t.name, Number(t.playcount) || 0];
   }
 
   const artists = {};
   for (const a of artistsResult.items) {
     if (!a.name) continue;
-    artists[looseKey({ artist: a.name, name: '' })] = Number(a.playcount) || 0;
+    artists[looseKey({ artist: a.name, name: '' })] = [a.name, '', Number(a.playcount) || 0];
   }
 
   return {

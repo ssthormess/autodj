@@ -7,6 +7,8 @@ import { bold, green, red, yellow, dim } from '../ui/ansi.js';
 const ok = (m) => console.log(`${green('✔')} ${m}`);
 const bad = (m) => console.log(`${red('✖')} ${m}`);
 const meh = (m) => console.log(`${yellow('!')} ${m}`);
+// Neutral: worked, just had nothing useful in it.
+const note = (m) => console.log(`${dim('·')} ${dim(m)}`);
 
 /**
  * Verifies the two browser-session-backed feeds.
@@ -56,6 +58,7 @@ export async function loginWeb() {
     return;
   }
 
+  let profileProblem = false;
   const feeds = createFeeds(config);
   for (const [name, target, fn] of [
     ['Liked Music', feeds.FEEDS.liked, () => feeds.liked(20)],
@@ -73,15 +76,23 @@ export async function loginWeb() {
     if (tracks.length) {
       ok(`YouTube ${bold(name)}${detail} ${dim(`e.g. ${tracks[0].artist} — ${tracks[0].name}`)}`);
     } else if (counts?.raw) {
-      meh(`YouTube ${bold(name)}${detail} — returned items, but none were music`);
+      // Items came back, so the session is fine — the contents just weren't
+      // songs. Never suggest a cookie problem here; the fetch demonstrably
+      // worked.
+      note(`YouTube ${bold(name)}${detail} — session fine, but none of it was music`);
     } else {
-      bad(`YouTube ${bold(name)} returned nothing`);
+      bad(`YouTube ${bold(name)} returned nothing — session or profile problem`);
+      profileProblem = true;
     }
   }
 
-  console.log(dim('\n  If a feed is empty, check that yt-dlp reads the right Firefox profile:'));
-  console.log(dim(`    sources.cookiesFromBrowser = "${config.sources.cookiesFromBrowser}"`));
-  console.log(dim('    you have multiple profiles; append a path to target one, e.g.'));
-  console.log(dim('    "firefox:~/Library/Application Support/Firefox/Profiles/iw6pct0o.default-release"'));
+  // Only relevant when a feed returned literally nothing. A feed that returned
+  // items has already proved the cookies work.
+  if (profileProblem) {
+    console.log(dim('\n  A feed returned no items at all, which usually means yt-dlp read the'));
+    console.log(dim('  wrong Firefox profile. Set an explicit one in ~/.config/autodj/config.json:'));
+    console.log(dim(`    sources.cookiesFromBrowser  (currently "${config.sources.cookiesFromBrowser}")`));
+    console.log(dim('    e.g. "firefox:/Users/you/Library/Application Support/Firefox/Profiles/xxx.default-release"'));
+  }
   console.log('');
 }

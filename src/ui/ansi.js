@@ -16,6 +16,16 @@ export const HIDE_CURSOR = '\x1b[?25l';
 export const SHOW_CURSOR = '\x1b[?25h';
 export const clearLine = '\r\x1b[2K';
 
+// Alternate screen buffer: the UI gets its own screen and the shell's
+// scrollback is restored untouched on exit, so repainting cannot leave a trail
+// of previous frames behind.
+export const ENTER_ALT = '\x1b[?1049h';
+export const EXIT_ALT = '\x1b[?1049l';
+// Home the cursor and clear forward. Cheaper and far less flickery than
+// clearing the whole screen on every frame.
+export const HOME = '\x1b[H';
+export const CLEAR_DOWN = '\x1b[J';
+
 export function bar(ratio, width) {
   const filled = Math.max(0, Math.min(width, Math.round(ratio * width)));
   return `${'━'.repeat(filled)}${dim('─'.repeat(width - filled))}`;

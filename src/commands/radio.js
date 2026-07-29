@@ -1,13 +1,15 @@
 import { buildApp } from '../app.js';
-import { attachKeys } from '../ui/keys.js';
-import { renderNowPlaying } from '../ui/render.js';
-import { CLEAR, SHOW_CURSOR } from '../ui/ansi.js';
+import { createTui } from '../ui/tui.js';
 import { resolveMode } from '../dj/modes.js';
-import { setVerbose, info } from '../util/log.js';
+import { setVerbose, setSink } from '../util/log.js';
 
 /**
- * The continuous set. One render timer drives the screen and the mid-track
- * scrobble check; everything else is event-driven off the engine.
+ * The continuous set.
+ *
+ * The screen is driven by a single timer; everything else is event-driven off
+ * the engine. Playback starts before the first full refill completes, because
+ * a refill runs a dozen network lanes plus an LLM pass and takes close to a
+ * minute — far too long to sit in silence.
  */
 export async function radio({
   mood = null, seedQuery = null, verbose = false, noLlm = false, mode: modeName = null,
@@ -26,101 +28,116 @@ export async function radio({
   let volume = config.player.volume;
   let scrobbled = false;
   let quitting = false;
+  let stage = 'starting';
 
-  engine.on('scrobbled', () => {
-    scrobbled = true;
+  // Log output is captured, never printed: a stray write from a background
+  // lane would corrupt the frame.
+  const messages = [];
+  setSink((level, text) => {
+    messages.push({ level, text });
+    if (messages.length > 200) messages.shift();
   });
-  engine.on('playing', () => {
-    scrobbled = false;
-  });
+
+  engine.on('scrobbled', () => { scrobbled = true; });
+  engine.on('playing', () => { scrobbled = false; stage = null; });
+  engine.on('refilling', () => { stage = 'refilling'; });
+  engine.on('refilled', (n, llm) => { stage = `+${n}${llm ? ' llm' : ''}`; });
+  engine.on('unplayable', (t) => { stage = `no match for ${t.artist}`; });
+  engine.on('refill-error', (err) => { stage = `refill failed: ${err.message}`; });
+  engine.on('empty', () => { stage = 'no candidates — see autodj doctor'; });
 
   if (mood) engine.mood = mood;
 
-  // A seed query starts the set from a specific track instead of your history.
-  if (seedQuery) {
-    const [artist, ...rest] = seedQuery.split(' - ');
-    const seedTrack = rest.length
-      ? { artist: artist.trim(), name: rest.join(' - ').trim() }
-      : null;
-    if (seedTrack) {
-      const resolved = await sources.searcher.resolve(seedTrack).catch(() => null);
-      if (resolved) engine.queue.push({ ...seedTrack, videoId: resolved.id, source: 'seed' });
-    }
-  }
+  const setVolume = (next) => {
+    volume = Math.max(0, Math.min(130, next));
+    return player.setVolume(volume);
+  };
 
-  await engine.next();
-
-  const keys = attachKeys({
-    space: () => player.togglePause(),
-    n: () => engine.skip(),
-    right: () => engine.skip(),
-    l: () => engine.love().catch(() => {}),
-    b: () => {
-      engine.ban();
-      return engine.skip();
-    },
-    up: () => engine.vote(+1).catch(() => {}),
-    down: () => engine.vote(-1).catch(() => {}),
-    r: () => engine.refill(),
-    m: async () => {
-      const answer = await keys.prompt('\n  mood / direction (blank to clear): ');
+  const actions = {
+    pause: () => player.togglePause(),
+    skip: () => engine.skip(),
+    voteUp: () => engine.vote(+1),
+    voteDown: () => engine.vote(-1),
+    love: () => engine.love(),
+    ban: () => { engine.ban(); return engine.skip(); },
+    refill: () => engine.refill(),
+    volumeUp: () => setVolume(volume + 5),
+    volumeDown: () => setVolume(volume - 5),
+    mood: async () => {
+      const answer = await tui.prompt('mood / direction (blank clears)');
       await engine.setMood(answer);
     },
-    '+': () => {
-      volume = Math.min(130, volume + 5);
-      return player.setVolume(volume);
-    },
-    '=': () => {
-      volume = Math.min(130, volume + 5);
-      return player.setVolume(volume);
-    },
-    '-': () => {
-      volume = Math.max(0, volume - 5);
-      return player.setVolume(volume);
-    },
-    q: () => shutdown(),
     quit: () => shutdown(),
+  };
+
+  const tui = createTui({
+    mode: mode.label,
+    onKey: (name) => Promise.resolve(actions[name]?.()).catch(() => {}),
   });
 
-  const timer = setInterval(async () => {
-    if (quitting) return;
-    await engine.tick().catch(() => {});
-
+  async function draw() {
     const [position, duration, paused] = await Promise.all([
       player.position().catch(() => 0),
       player.duration().catch(() => null),
       player.isPaused().catch(() => false),
     ]);
 
-    process.stdout.write(
-      renderNowPlaying({
-        track: engine.nowPlaying,
-        position,
-        duration: duration ?? engine.nowPlaying?.duration ?? null,
-        paused,
-        queue: engine.queue,
-        stats: history.stats(),
-        mood: engine.mood,
-        mode: mode.label,
-        scrobbled,
-      }),
-    );
+    tui.render({
+      track: engine.nowPlaying,
+      position,
+      duration: duration ?? engine.nowPlaying?.duration ?? null,
+      paused,
+      volume,
+      queue: engine.queue,
+      stats: history.stats(),
+      mood: engine.mood,
+      stage,
+      messages,
+      scrobbled,
+    });
+  }
+
+  const timer = setInterval(async () => {
+    if (quitting) return;
+    await engine.tick().catch(() => {});
+    await draw();
   }, 1000);
 
   async function shutdown() {
     if (quitting) return;
     quitting = true;
     clearInterval(timer);
-    keys.detach();
-    process.stdout.write(CLEAR + SHOW_CURSOR);
-    info('saving…');
+    setSink(null);
+    tui.destroy();
     await engine.stop().catch(() => {});
     const flushed = await scrobbler.flush().catch(() => 0);
-    if (flushed) info(`flushed ${flushed} pending scrobble(s)`);
+    if (flushed) console.log(`flushed ${flushed} pending scrobble(s)`);
     player.quit();
     process.exit(0);
   }
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+
+  await draw();
+  await setVolume(volume);
+
+  // A seed query overrides both the quick start and the first refill.
+  if (seedQuery) {
+    const [artist, ...rest] = seedQuery.split(' - ');
+    if (rest.length) {
+      const seedTrack = { artist: artist.trim(), name: rest.join(' - ').trim() };
+      const resolved = await sources.searcher.resolve(seedTrack).catch(() => null);
+      if (resolved) engine.queue.push({ ...seedTrack, videoId: resolved.id, source: 'seed' });
+    }
+  }
+
+  // Start audible quickly, then let the real queue build behind it.
+  (async () => {
+    const quick = await engine.quickStart().catch(() => null);
+    if (!quick) {
+      stage = 'building the first set';
+      await engine.next();
+    }
+  })().catch((err) => { stage = `failed to start: ${err.message}`; });
 }

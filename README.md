@@ -4,13 +4,15 @@ Continuous terminal radio built from your own Last.fm history. It picks the
 music, streams it from YouTube Music, and scrobbles it back — indefinitely,
 without you touching anything.
 
-No Electron, no browser tab. Node + `mpv` + `yt-dlp`, zero npm dependencies.
+No Electron, no browser tab. Node + `mpv` + `yt-dlp`, with `blessed` for the
+terminal UI.
 
 ## Install
 
 ```bash
 brew install mpv yt-dlp
 git clone https://github.com/ssthormess/autodj.git && cd autodj
+npm install
 node bin/autodj.js doctor      # check deps + credentials
 node bin/autodj.js sync        # mirror your Last.fm library locally (~30s)
 ```

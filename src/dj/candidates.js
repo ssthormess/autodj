@@ -34,7 +34,6 @@ export async function gatherCandidates(sources, seeds, config) {
   if (config.sources.ytmFeeds && feeds) {
     if (laneAllowed('ytm-rec')) lanes.push(feeds.recommendations(30));
     if (laneAllowed('ytm-liked')) lanes.push(feeds.liked(40));
-    if (laneAllowed('ytm-history')) lanes.push(feeds.history(30));
   }
 
   // ---- ListenBrainz collaborative filtering --------------------------------

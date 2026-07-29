@@ -111,6 +111,31 @@ export class DjEngine extends EventEmitter {
     }
   }
 
+  /**
+   * Start playing within a second or two, without waiting for a full refill.
+   *
+   * A complete refill takes the better part of a minute — a dozen network
+   * lanes, a Last.fm correction pass and an LLM sequencing call — and until
+   * this existed the user simply sat in silence for all of it. So: pick
+   * something instantly from the locally synced library, play it, and let the
+   * real queue build in the background behind it.
+   *
+   * Only used for modes that permit familiar material; `discover` by
+   * definition cannot be served from your own library, so it waits.
+   */
+  async quickStart() {
+    const mode = this.#config.mode;
+    if (mode?.require && !mode.require({ userPlaycount: 1 })) return null;
+    if (!this.#library?.isSamplable()) return null;
+
+    const [pick] = this.#library.sample(1, { minPlaycount: 2 });
+    if (!pick) return null;
+
+    // Kick the real refill off first so it runs while this track plays.
+    this.refill();
+    return this.play({ ...pick, source: 'library', seed: 'quick start' });
+  }
+
   async next() {
     if (this.#stopped) return null;
 

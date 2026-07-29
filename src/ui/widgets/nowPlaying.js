@@ -1,0 +1,91 @@
+import blessed from 'blessed';
+import { time } from '../ansi.js';
+import { plural } from '../../util/format.js';
+
+/**
+ * Now-playing panel: title, artist, seek bar, volume, and provenance.
+ *
+ * blessed owns the geometry. Nothing here writes cursor escapes or measures
+ * string widths by hand, which is what made the previous hand-rolled renderer
+ * scatter text across the terminal whenever a line exceeded the width or a
+ * colour code threw the length calculation off.
+ */
+export function createNowPlaying(parent) {
+  const box = blessed.box({
+    parent,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 9,
+    tags: true,
+    border: { type: 'line' },
+    style: { border: { fg: 'cyan' } },
+    label: ' now playing ',
+  });
+
+  const title = blessed.text({ parent: box, top: 0, left: 1, right: 1, tags: true, content: '' });
+  const artist = blessed.text({ parent: box, top: 1, left: 1, right: 1, tags: true, content: '' });
+
+  const seek = blessed.progressbar({
+    parent: box,
+    top: 3,
+    left: 1,
+    right: 12,
+    height: 1,
+    filled: 0,
+    ch: '━',
+    style: { bar: { fg: 'green' }, fg: 'black' },
+  });
+  const clock = blessed.text({ parent: box, top: 3, right: 1, width: 11, tags: true, content: '' });
+
+  const volumeBar = blessed.progressbar({
+    parent: box,
+    top: 5,
+    left: 6,
+    width: 20,
+    height: 1,
+    filled: 0,
+    ch: '▇',
+    style: { bar: { fg: 'yellow' }, fg: 'black' },
+  });
+  const volumeLabel = blessed.text({ parent: box, top: 5, left: 1, width: 5, tags: true, content: '{gray-fg}vol{/}' });
+  const volumeValue = blessed.text({ parent: box, top: 5, left: 27, width: 12, tags: true, content: '' });
+
+  const badges = blessed.text({ parent: box, top: 6, left: 1, right: 1, tags: true, content: '' });
+
+  function update(state) {
+    const { track, position, duration, paused, volume, scrobbled, stage } = state;
+
+    if (!track) {
+      title.setContent(`{yellow-fg}◌{/} ${stage ?? 'starting…'}`);
+      artist.setContent('{gray-fg}the first set can take a moment{/}');
+      seek.setProgress(0);
+      clock.setContent('');
+      badges.setContent('');
+    } else {
+      title.setContent(`{bold}${blessed.escape(track.name)}{/bold}`);
+      artist.setContent(
+        `{cyan-fg}${blessed.escape(track.artist)}{/}` +
+          (track.album ? ` {gray-fg}· ${blessed.escape(track.album)}{/}` : ''),
+      );
+      seek.setProgress(duration ? Math.min(100, (position / duration) * 100) : 0);
+      clock.setContent(`{gray-fg}${time(position)}/${time(duration)}{/}`);
+
+      const parts = [
+        paused ? '{yellow-fg}paused{/}' : '{green-fg}playing{/}',
+        `{gray-fg}${track.curated ? 'llm' : track.source ?? 'lastfm'}{/}`,
+        track.userPlaycount
+          ? `{gray-fg}${plural(track.userPlaycount, 'play')}{/}`
+          : '{green-fg}new to you{/}',
+        track.userLoved ? '{red-fg}♥{/}' : null,
+        scrobbled ? '{green-fg}scrobbled{/}' : '{gray-fg}not yet scrobbled{/}',
+      ].filter(Boolean);
+      badges.setContent(parts.join(' {gray-fg}·{/} '));
+    }
+
+    volumeBar.setProgress(Math.min(100, (volume / 130) * 100));
+    volumeValue.setContent(`{gray-fg}${volume}%{/}`);
+  }
+
+  return { box, update };
+}

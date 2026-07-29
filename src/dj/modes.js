@@ -35,7 +35,7 @@ export const MODES = {
     noveltyBonus: -1.5,
     familiarityCap: Infinity,
     require: (track) => (track.userPlaycount ?? 0) > 0,
-    lanes: ['user-top', 'lastfm-library', 'ytm-history', 'ytm-liked', 'loved'],
+    lanes: ['user-top', 'lastfm-library', 'ytm-liked', 'loved'],
   },
 
   /** Album tracks by artists you know, rather than their singles. */

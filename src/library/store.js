@@ -38,10 +38,50 @@ export function createLibrary() {
     return state;
   }
 
-  /** Your playcount for a track, or 0. Never null — absence *is* zero here. */
-  const playcountOf = (track) => state.tracks[looseKey(track)] ?? 0;
+  /**
+   * Entries are `[artist, name, playcount]`. Earlier versions stored a bare
+   * playcount, which made the library useless for anything but lookups: the
+   * key folds artist and title into one string, so a playable pair could not
+   * be recovered from it. Both shapes are accepted so an existing sync keeps
+   * working until it is refreshed.
+   */
+  const entryPlaycount = (entry) => (Array.isArray(entry) ? entry[2] : entry) ?? 0;
 
-  const artistPlaycountOf = (track) => state.artists[artistKeyOf(track)] ?? 0;
+  /** Your playcount for a track, or 0. Never null — absence *is* zero here. */
+  const playcountOf = (track) => entryPlaycount(state.tracks[looseKey(track)]);
+
+  const artistPlaycountOf = (track) => entryPlaycount(state.artists[artistKeyOf(track)]);
+
+  /** True when entries carry names, i.e. the library can be sampled from. */
+  const isSamplable = () => {
+    const first = Object.values(state.tracks)[0];
+    return Array.isArray(first);
+  };
+
+  /**
+   * Random tracks from your own library, weighted toward what you play most.
+   * Used to start playback instantly while the real queue is still building.
+   */
+  function sample(count = 1, { minPlaycount = 1 } = {}) {
+    const entries = Object.values(state.tracks).filter(
+      (e) => Array.isArray(e) && e[2] >= minPlaycount,
+    );
+    if (!entries.length) return [];
+
+    const picked = [];
+    const seen = new Set();
+    // Rejection sampling against the max playcount: cheap, and avoids building
+    // a cumulative weight table over 40k+ entries on every call.
+    const max = entries.reduce((m, e) => Math.max(m, e[2]), 1);
+    for (let tries = 0; tries < count * 200 && picked.length < count; tries += 1) {
+      const e = entries[Math.floor(Math.random() * entries.length)];
+      if (seen.has(e[0] + e[1])) continue;
+      if (Math.random() > Math.log1p(e[2]) / Math.log1p(max)) continue;
+      seen.add(e[0] + e[1]);
+      picked.push({ artist: e[0], name: e[1], userPlaycount: e[2], source: 'library' });
+    }
+    return picked;
+  }
 
   /** True only when the library is populated enough for absence to mean zero. */
   const isReady = () => Object.keys(state.tracks).length > 0;
@@ -57,5 +97,8 @@ export function createLibrary() {
     totals: state.totals,
   });
 
-  return { load, save, playcountOf, artistPlaycountOf, hasHeard, knowsArtist, isReady, stats };
+  return {
+    load, save, playcountOf, artistPlaycountOf, hasHeard, knowsArtist,
+    isReady, isSamplable, sample, stats,
+  };
 }
